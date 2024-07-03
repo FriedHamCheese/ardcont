@@ -36,3 +36,35 @@ bool AnalogSensor::read(){
 
 	return delta_beyond_error_range;  
 }
+
+
+RotaryEncoder::RotaryEncoder(const uint8_t pin_CLK, const uint8_t pin_DT, const uint8_t id)
+:	Sensor(pin_CLK, id, 0),
+	pin_CLK(pin_CLK),
+	pin_DT(pin_DT)
+{
+	pinMode(this->pin_CLK, INPUT);
+	pinMode(this->pin_DT, INPUT);
+	
+	this->prev_CLK_state = digitalRead(this->pin_CLK);
+}
+
+bool RotaryEncoder::read(){
+	const int CLK_pin_state = digitalRead(this->pin_CLK);
+	
+	if(CLK_pin_state != this->prev_CLK_state){
+		this->prev_CLK_state = CLK_pin_state;
+		const int DT_pin_state = digitalRead(this->pin_DT);
+		const bool clockwise_increment = CLK_pin_state == HIGH && DT_pin_state == LOW;
+		const bool counterclockwise_increment = CLK_pin_state == HIGH && DT_pin_state == HIGH;
+		
+		if(clockwise_increment){
+			this->value++;
+			return true;
+		}else if(counterclockwise_increment){
+			this->value--;
+			return true;
+		}
+	}
+	return false;
+}

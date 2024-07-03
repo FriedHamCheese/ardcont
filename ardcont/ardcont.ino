@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-constexpr size_t sensor_count = 4;
+constexpr size_t sensor_count = 5;
 static Sensor* sensors[sensor_count];
 
 //Deck 1, right deck
@@ -14,7 +14,7 @@ DigitalSensor deck_1_loop_out_button(11, 2);
 
 AnalogSensor deck_1_tempo_potentiometer(0, 3);
 
-//RotaryEncoder deck_1_loop_interval(9, 8, 3);
+RotaryEncoder deck_1_loop_interval(9, 8, 4);
 
 //Deck 0, left deck
 
@@ -28,12 +28,14 @@ void setup() {
   Serial.println("1, pulldown-button, 0-1");
   Serial.println("2, pulldown-button, 0-1");
   Serial.println("3, potentiometer, 0-1023");
+  Serial.println("4, Rotary encoder, +-65535");
   Serial.println();
 
   sensors[0] = &deck_1_play_pause_button;
   sensors[1] = &deck_1_loop_in_button;
   sensors[2] = &deck_1_loop_out_button;
   sensors[3] = &deck_1_tempo_potentiometer;
+  sensors[4] = &deck_1_loop_interval;
 }
 
 void loop() {

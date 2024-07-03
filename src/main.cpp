@@ -3,6 +3,7 @@
 #include "audeng_wrapper.hpp"
 
 #include "ntrb/alloc.h"
+#include "ntrb/utils.h"
 #include "serial/serial.h"
 
 #include <cmath>
@@ -11,23 +12,6 @@
 #include <thread>
 #include <cstdint>
 #include <iostream>
-
-/*
-Catch exceptions
-types that isn't only just int
-class for sensors
-iostream usage
-*/
-
-static void set_beats_per_loop(const std::uint16_t potentiometer_adc_value){
-	constexpr std::uint16_t adc_per_step = 100;
-	const std::uint16_t steps = potentiometer_adc_value / adc_per_step;
-	
-	if(steps >= 10)
-		audeng_state::audio_tracks[0].cancel_loop();
-	else
-		audeng_state::audio_tracks[0].set_beats_per_loop(std::pow(2, steps-5));
-}
 
 static void serial_listener(serial::Serial& arduino_serial){
 	std::string buffer;
@@ -54,22 +38,25 @@ static void serial_listener(serial::Serial& arduino_serial){
 			switch(sensor_id){
 				case 0:
 					if(sensor_value){
-						if(!audeng_state::audio_tracks[0].toggle_play_pause()){
+						if(!audeng_state::audio_tracks[1].toggle_play_pause()){
 							std::cerr << "[Error]: serial_listener(): Unable to toggle play-pause due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;							
+							std::cout << ": " << std::flush;
 						}
 					}
 					break;
 				case 1:
 					if(sensor_value){
-						if(!audeng_state::audio_tracks[0].set_loop()){
+						if(!audeng_state::audio_tracks[1].set_loop()){
 							std::cerr << "[Error]: serial_listener(): Unable to set loop cue due to rwlock acquisition error.\n";
 							std::cout << ": " << std::flush;
 						}
 					}
+					break;					
+				case 2:
+					if(sensor_value) audeng_state::audio_tracks[1].cancel_loop();
 					break;
-				case 3:
-					set_beats_per_loop(sensor_value);
+				case 4:
+					audeng_state::audio_tracks[1].set_beats_per_loop(std::pow(2, ntrb_clamp_i64(sensor_value, -5, 5)));
 					break;
 			}
 		}catch(const std::invalid_argument& not_a_number){
