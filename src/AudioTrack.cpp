@@ -7,6 +7,7 @@
 #include <pthread.h>
 
 #include <mutex>
+#include <cmath>
 #include <vector>
 #include <chrono>
 #include <fstream>
@@ -39,7 +40,7 @@ void AudioTrack::load_track(){
 		return;
 	}
 		
-	if(this->loop_queued.load()){
+	if(this->loop_queued.load()){/*
 		const std::uint32_t samples_in_sample_buffer = this->minimum_frames_in_buffer * ntrb_std_audchannels;
 
 		while(this->samples.size() < samples_in_sample_buffer){
@@ -63,23 +64,53 @@ void AudioTrack::load_track(){
 			
 			for(std::uint32_t i = 0; i < samples_to_be_read_from_file; i++)
 				this->samples.push_back(this->stdaud_from_file.datapoints[i]);
+		}*/
+	}else{	
+		const std::uint32_t minimum_samples_in_sample_buffer = this->minimum_frames_in_buffer * ntrb_std_audchannels;
+
+		while(this->samples.size() < minimum_samples_in_sample_buffer && this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_OK){
+			this->stdaud_from_file.load_buffer_callback(&(this->stdaud_from_file));	
+			const ntrb_AudioBufferLoad_Error load_err = this->stdaud_from_file.load_err;
+			
+			if(load_err != ntrb_AudioBufferLoad_OK && load_err != ntrb_AudioBufferLoad_EOF){
+				this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
+				std::cerr << "[Error]: AudioTrack::load_track(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << load_err << ")."
+					<< "\n\tSkipping audio loading callback...\n";
+				std::cout << ": " << std::flush;
+				return;
+			}
+			
+			while(this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_OK){
+				const double this_frame_pos = this->regular_speed_stdaud_frames_pos.load();
+				const std::uint32_t this_frame_pos_floored = std::floor(this_frame_pos);
+				const std::uint32_t this_frame_pos_ceiled = std::ceil(this_frame_pos);
+
+				const std::uint32_t stdaud_from_file_frame_end = this->stdaud_from_file.stdaud_buffer_first_frame + this->stdaud_from_file.monochannel_samples;
+				if(this_frame_pos_ceiled >= stdaud_from_file_frame_end || this->samples.size() >= minimum_samples_in_sample_buffer){
+					this->stdaud_from_file.stdaud_next_buffer_first_frame = this->regular_speed_stdaud_frames_pos.load();
+					break;
+				}
+				
+				const std::uint32_t max_i_in_stdaud_from_file = (this->stdaud_from_file.monochannel_samples * 2) - 1;
+				
+				const std::uint32_t stdaud_frame_i_frame_floored = this_frame_pos_floored - this->stdaud_from_file.stdaud_buffer_first_frame;
+				const std::uint32_t stdaud_frame_i_frame_ceiled = this_frame_pos_ceiled - this->stdaud_from_file.stdaud_buffer_first_frame;
+				
+				const std::uint32_t stdaud_frame_lch_i_floored = ntrb_clamp_u64(stdaud_frame_i_frame_floored * 2, 0, max_i_in_stdaud_from_file - 1);
+				const std::uint32_t stdaud_frame_lch_i_ceiled = ntrb_clamp_u64(stdaud_frame_i_frame_ceiled * 2, 0, max_i_in_stdaud_from_file - 1);
+				
+				const std::uint32_t stdaud_frame_rch_i_floored = ntrb_clamp_u64((stdaud_frame_i_frame_floored * 2) + 1, 0, max_i_in_stdaud_from_file);
+				const std::uint32_t stdaud_frame_rch_i_ceiled = ntrb_clamp_u64((stdaud_frame_i_frame_ceiled * 2) + 1, 0, max_i_in_stdaud_from_file);
+				
+				const float left_channel_value = this->stdaud_from_file.datapoints[stdaud_frame_lch_i_floored] + ((this_frame_pos - this_frame_pos_floored) * (this->stdaud_from_file.datapoints[stdaud_frame_lch_i_ceiled] - this->stdaud_from_file.datapoints[stdaud_frame_lch_i_floored]));
+				
+				const float right_channel_value = this->stdaud_from_file.datapoints[stdaud_frame_rch_i_floored] + ((this_frame_pos - this_frame_pos_floored) * (this->stdaud_from_file.datapoints[stdaud_frame_rch_i_ceiled] - this->stdaud_from_file.datapoints[stdaud_frame_rch_i_floored]));
+				
+				this->samples.push_back(left_channel_value);
+				this->samples.push_back(right_channel_value);	
+				this->regular_speed_stdaud_frames_pos = this_frame_pos + this->speed_multiplier.load();
+			}
 		}
-	}else{		
-		this->stdaud_from_file.load_buffer_callback(&(this->stdaud_from_file));	
-		const ntrb_AudioBufferLoad_Error load_err = this->stdaud_from_file.load_err;
-		
-		if(load_err != ntrb_AudioBufferLoad_OK && load_err != ntrb_AudioBufferLoad_EOF){
-			this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
-			std::cerr << "[Error]: AudioTrack::load_track(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << load_err << ")."
-				<< "\n\tSkipping audio loading callback...\n";
-			std::cout << ": " << std::flush;
-			return;
-		}
-		
-		const std::uint32_t file_stdaud_sample_count = this->stdaud_from_file.monochannel_samples * ntrb_std_audchannels;
-		
-		for(std::uint32_t i = 0; i < file_stdaud_sample_count; i++)
-			this->samples.push_back(this->stdaud_from_file.datapoints[i]);
 	}
 	
 	const std::uint32_t sample_count = samples.size();
@@ -119,6 +150,8 @@ ntrb_AudioBufferNew_Error AudioTrack::set_file_to_load_from(const char* const fi
 	this->loop_queued = false;
 	this->bpm = 0.0;
 	this->first_beat_stdaud_frame = 0;
+	
+	this->regular_speed_stdaud_frames_pos = 0.0;
 	
 	const std::string aud_info_filename = get_audio_info_filename_from_audio_filename(filename);
 	if(aud_info_filename.empty()){
@@ -266,4 +299,8 @@ void AudioTrack::cancel_loop(){
 
 std::uint8_t AudioTrack::get_track_id() const{
 	return this->track_id;
+}
+
+float AudioTrack::get_bpm() const{
+	return this->bpm.load();
 }

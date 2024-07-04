@@ -55,6 +55,13 @@ static void serial_listener(serial::Serial& arduino_serial){
 				case 2:
 					if(sensor_value) audeng_state::audio_tracks[1].cancel_loop();
 					break;
+				case 3:{
+					const float speed_multiplier = 0.5 + ((float)sensor_value / 1023.0);
+					audeng_state::audio_tracks[1].speed_multiplier = speed_multiplier;
+					std::cout << "speed: " << audeng_state::audio_tracks[1].speed_multiplier.load() << "x.\n";
+					
+					break;
+				}
 				case 4:
 					audeng_state::audio_tracks[1].set_beats_per_loop(std::pow(2, ntrb_clamp_i64(sensor_value, -5, 5)));
 					break;
@@ -179,6 +186,7 @@ int main(){
 	std::thread serial_thread(serial_listener, std::ref(arduino_serial));
 	std::thread keyboard_thread(keyboard_listener);
 	std::thread audeng_thread(run_audio_engine);
+	
 	serial_thread.join();
 	keyboard_thread.join();
 	audeng_thread.join();
