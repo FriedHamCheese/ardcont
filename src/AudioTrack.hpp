@@ -38,15 +38,17 @@ class AudioTrack{
 	float get_bpm() const;
 
 	private:
+	bool load_single_frame();
+	
 	std::optional<std::uint32_t> find_nearest_loop_cue_point();
 	
 	std::mutex sample_access_mutex;
 	std::vector<float> samples;
 	std::uint32_t minimum_frames_in_buffer;
-
+	
 	ntrb_AudioBuffer stdaud_from_file;
 	bool initialised_stdaud_from_file = false;
-
+	
 	std::atomic<float> amplitude_multiplier = 1.0;
 	
 	std::atomic<bool> in_pause_state = true;
