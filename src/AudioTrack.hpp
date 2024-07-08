@@ -33,16 +33,22 @@ class AudioTrack{
 	
 	std::uint8_t get_track_id() const;
 
+	std::atomic<double> speed_multiplier = 1.0;
+	
+	float get_bpm() const;
+
 	private:
+	bool load_single_frame();
+	
 	std::optional<std::uint32_t> find_nearest_loop_cue_point();
 	
 	std::mutex sample_access_mutex;
 	std::vector<float> samples;
 	std::uint32_t minimum_frames_in_buffer;
-
+	
 	ntrb_AudioBuffer stdaud_from_file;
 	bool initialised_stdaud_from_file = false;
-
+	
 	std::atomic<float> amplitude_multiplier = 1.0;
 	
 	std::atomic<bool> in_pause_state = true;
@@ -51,7 +57,9 @@ class AudioTrack{
 	std::atomic<std::uint32_t> loop_frame_begin = 0;
 	std::atomic<std::uint32_t> loop_frame_end = 0;
 	std::atomic<float> beats_per_loop = 4;
-	
+		
+	std::atomic<double> regular_speed_stdaud_frames_pos = 0;
+
 	std::string audfile_name = "Track not loaded.";
 	std::atomic<float> bpm = 0.0;
 	std::atomic<std::uint32_t> first_beat_stdaud_frame = 0;
