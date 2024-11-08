@@ -3,6 +3,14 @@
 
 #include <stdint.h>
 
+enum ButtonState : int16_t{
+	ButtonState_Untouched,
+	ButtonState_Pressed,
+  
+	ButtonState_Held,
+	ButtonState_Released,
+};
+
 class Sensor{
   public:
   Sensor(const uint8_t pin, const uint8_t id, const int16_t init_value);
@@ -23,6 +31,15 @@ class DigitalSensor : public Sensor{
   bool read() override;
 };
 
+class Button : public Sensor{
+  public:
+  Button(const uint8_t pin, const uint8_t id);
+  bool read() override;  
+
+  protected:
+  unsigned long last_pressed_ms;
+};
+
 class AnalogSensor : public Sensor{
   protected:
   static constexpr int16_t analog_error_range = 2;
@@ -32,6 +49,11 @@ class AnalogSensor : public Sensor{
   bool read() override;
 };
 
+class AnalogAsDigitalSensor : public Sensor{
+  public:
+  AnalogAsDigitalSensor(const uint8_t pin, const uint8_t id);
+  bool read() override;
+};
 
 class RotaryEncoder : public Sensor{
 	public:

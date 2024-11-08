@@ -3,39 +3,45 @@
 #include <stdlib.h>
 #include <string.h>
 
-constexpr size_t sensor_count = 5;
+constexpr size_t sensor_count = 12;
 static Sensor* sensors[sensor_count];
 
-//Deck 1, right deck
-DigitalSensor deck_1_play_pause_button(12, 0);
+Button left_play_pause_button(12, 0);
+Button left_cue_button(11, 1);
+AnalogSensor  left_tempo_potentiometer(0, 2);
+RotaryEncoder left_loop_interval_rotaryenc(8, 7, 3);
+Button left_loop_in_button(9, 4);
+Button left_loop_out_button(10, 5);
 
-DigitalSensor deck_1_loop_in_button(10, 1);
-DigitalSensor deck_1_loop_out_button(11, 2);
+Button right_play_pause_button(13, 6);
+AnalogAsDigitalSensor right_cue_button(1, 7);
+AnalogSensor right_tempo_potentiometer(2, 8);
+RotaryEncoder right_loop_interval_rotaryenc(4, 3, 9);
+Button right_loop_in_button(2, 10);
+AnalogAsDigitalSensor right_loop_out_button(3, 11);
 
-AnalogSensor deck_1_tempo_potentiometer(0, 3);
-
-RotaryEncoder deck_1_loop_interval(9, 8, 4);
-
-//Deck 0, left deck
 
 void setup() {
   Serial.begin(9600);
   delay(2000);
 
-  Serial.println("Ardcont project. Not intended to be used with Arduino IDE.");
-  Serial.println("Sensor ID, type, range:");
-  Serial.println("0, pulldown-button, 0-1");
-  Serial.println("1, pulldown-button, 0-1");
-  Serial.println("2, pulldown-button, 0-1");
-  Serial.println("3, potentiometer, 0-1023");
-  Serial.println("4, Rotary encoder, +-65535");
-  Serial.println();
+  Serial.println("Ardcont project, 2024.");
 
-  sensors[0] = &deck_1_play_pause_button;
-  sensors[1] = &deck_1_loop_in_button;
-  sensors[2] = &deck_1_loop_out_button;
-  sensors[3] = &deck_1_tempo_potentiometer;
-  sensors[4] = &deck_1_loop_interval;
+  sensors[0] = &left_play_pause_button;
+  sensors[1] = &left_cue_button;
+  sensors[2] = &left_tempo_potentiometer;
+  sensors[3] = &left_loop_interval_rotaryenc;
+  sensors[4] = &left_loop_in_button;
+  sensors[5] = &left_loop_out_button;
+
+  sensors[6] = &right_play_pause_button;
+  sensors[7] = &right_cue_button;
+  sensors[8] = &right_tempo_potentiometer;
+  sensors[9] = &right_loop_interval_rotaryenc;
+  sensors[10] = &right_loop_in_button;
+  sensors[11] = &right_loop_out_button;  
+
+  Serial.println();
 }
 
 void loop() {
