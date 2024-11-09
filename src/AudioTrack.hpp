@@ -16,9 +16,11 @@ class AudioTrack{
 	~AudioTrack();
 	
 	virtual void load_track() = 0;
-	virtual ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename) = 0;
+	virtual ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback) = 0;
 	virtual bool toggle_play_pause() = 0;
-	virtual std::mutex& get_sample_access_mutex() = 0;
+	std::mutex& get_sample_access_mutex(){
+		return this->sample_access_mutex;
+	}
 	virtual const std::vector<float>& get_samples() const = 0;
 	
 	virtual void fine_step_backward() = 0;
@@ -31,8 +33,12 @@ class AudioTrack{
 	
 	virtual bool cue_to_nearest_cue_point() = 0;
 	
-	virtual std::uint8_t get_track_id() const = 0;
-	virtual float get_bpm() const = 0;
+	std::uint8_t get_track_id() const{
+		return this->track_id;		
+	}
+	float get_bpm() const{
+		return this->bpm.load();		
+	}
 	
 	protected:
 	virtual bool load_single_frame() = 0;
@@ -84,9 +90,8 @@ class AudioTrackImpl : public AudioTrack{
 	}
 	
 	void load_track();
-	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename);
+	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback);
 	bool toggle_play_pause();
-	std::mutex& get_sample_access_mutex();
 	const std::vector<float>& get_samples() const;
 	
 	void fine_step_backward();
@@ -98,9 +103,6 @@ class AudioTrackImpl : public AudioTrack{
 	void cancel_loop();
 	
 	bool cue_to_nearest_cue_point();
-	
-	std::uint8_t get_track_id() const;
-	float get_bpm() const;
 	
 	private:
 	bool load_single_frame();
@@ -111,42 +113,5 @@ class AudioTrackImpl : public AudioTrack{
 	std::optional<std::uint32_t> find_eariler_cue_point();
 	void adjust_speed_multiplier();
 };
-
-/*
-class AudioTrackMock : public AudioTrack{
-	public:
-	AudioTrackImpl(const std::uint32_t minimum_frames_in_buffer, const uint8_t track_id);
-	~AudioTrackImpl();
-	
-	void load_track() = 0;
-	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename);
-	bool toggle_play_pause();
-	std::mutex& get_sample_access_mutex();
-	const std::vector<float>& get_samples() const;
-	
-	void fine_step_backward();
-	void fine_step_forward();
-	void set_destination_speed_multiplier(const float dest_speed_multiplier);
-	
-	bool set_loop();
-	void set_beats_per_loop(const float beats_per_loop);
-	void cancel_loop();
-	
-	bool cue_to_nearest_cue_point();
-	
-	std::uint8_t get_track_id() const;
-	float get_bpm() const;
-	
-	private:
-	bool load_single_frame();
-	bool fill_sample_buffer_while_in_loop(const std::uint32_t minimum_samples_in_sample_buffer);
-	bool fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer);
-	
-	std::optional<std::uint32_t> find_nearest_loop_cue_point();
-	std::optional<std::uint32_t> find_eariler_cue_point();
-	void adjust_speed_multiplier();
-
-	std::uint32_t minimum_frames_in_buffer;
-};*/
 
 #endif

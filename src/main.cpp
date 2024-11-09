@@ -2,7 +2,7 @@
 #include "KeyboardInterface.hpp"
 
 #include "AudioTrack.hpp"
-#include "audeng_state.hpp"
+#include "GlobalStates.hpp"
 #include "audeng_wrapper.hpp"
 
 #include "ntrb/alloc.h"
@@ -54,19 +54,21 @@ int main(){
 	std::cout << "Messages from the Arduino will be displayed to indicate the Arduino is ready.\n";
 	std::cout << "First time serial connection may result in garbage being in the message.\n\n" << std::flush;
 
-	audeng_state::audio_tracks.push_back(std::make_unique<AudioTrackImpl>(audeng_state::frames_per_callback, 0));
-	audeng_state::audio_tracks.push_back(std::make_unique<AudioTrackImpl>(audeng_state::frames_per_callback, 1));
+	GlobalStates global_states;
+
+	global_states.audio_tracks.push_back(std::make_unique<AudioTrackImpl>(global_states.get_frames_per_callback(), 0));
+	global_states.audio_tracks.push_back(std::make_unique<AudioTrackImpl>(global_states.get_frames_per_callback(), 1));
 	
-	std::thread serial_thread(serial_listener, std::ref(arduino_serial));
-	std::thread keyboard_thread(keyboard_listener, std::ref(keyboard_cin));
-	std::thread audeng_thread(run_audio_engine);
-	
+	std::thread serial_thread(serial_listener, std::ref(arduino_serial), std::ref(global_states));
+	std::thread keyboard_thread(keyboard_listener, std::ref(keyboard_cin), std::ref(global_states), nullptr);
+	std::thread audeng_thread(run_audio_engine, std::ref(global_states));
+
 	serial_thread.join();
 	keyboard_thread.join();
 	audeng_thread.join();
 	
-	audeng_state::audio_tracks[0].reset(nullptr);
-	audeng_state::audio_tracks[1].reset(nullptr);
+	global_states.audio_tracks[0].reset(nullptr);
+	global_states.audio_tracks[1].reset(nullptr);
 	
 	#ifdef NTRB_MEMDEBUG
 	ntrb_memdebug_uninit(true);

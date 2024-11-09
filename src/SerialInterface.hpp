@@ -1,6 +1,7 @@
 #ifndef serialinterface_hpp
 #define serialinterface_hpp
 
+#include "GlobalStates.hpp"
 #include "serial/serial.h"
 
 class SerialInterface{
@@ -50,6 +51,6 @@ class SerialMock : public SerialInterface{
 	}
 };
 
-void serial_listener(SerialInterface& arduino_serial);
+void serial_listener(SerialInterface& arduino_serial, GlobalStates& global_states);
 
 #endif

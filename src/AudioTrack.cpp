@@ -1,5 +1,5 @@
 #include "AudioTrack.hpp"
-#include "audeng_state.hpp"
+#include "GlobalStates.hpp"
 
 #include "ntrb/aud_std_fmt.h"
 #include "ntrb/utils.h"
@@ -73,13 +73,13 @@ static std::string get_audio_info_filename_from_audio_filename(const std::string
 	}
 }
 
-ntrb_AudioBufferNew_Error AudioTrackImpl::set_file_to_load_from(const char* const filename){
+ntrb_AudioBufferNew_Error AudioTrackImpl::set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback){
 	std::lock_guard<std::mutex> _(this->sample_access_mutex);
 
 	if(this->initialised_stdaud_from_file)
 		ntrb_AudioBuffer_free(&(this->stdaud_from_file));
 	
-	const ntrb_AudioBufferNew_Error new_file_aud_err = ntrb_AudioBuffer_new(&(this->stdaud_from_file), filename, audeng_state::frames_per_callback);
+	const ntrb_AudioBufferNew_Error new_file_aud_err = ntrb_AudioBuffer_new(&(this->stdaud_from_file), filename, frames_per_callback);
 	if(new_file_aud_err) return new_file_aud_err;
 
 	this->initialised_stdaud_from_file = true;
@@ -163,11 +163,6 @@ bool AudioTrackImpl::toggle_play_pause(){
 	return true;
 }
 
-
-std::mutex& AudioTrackImpl::get_sample_access_mutex(){
-	return this->sample_access_mutex;
-}
-
 const std::vector<float>& AudioTrackImpl::get_samples() const{
 	return this->samples;
 }
@@ -227,15 +222,6 @@ bool AudioTrackImpl::cue_to_nearest_cue_point(){
 	
 	this->regular_speed_stdaud_frames_pos = cue_point_frames.value();
 	return true;
-}
-
-
-std::uint8_t AudioTrackImpl::get_track_id() const{
-	return this->track_id;
-}
-
-float AudioTrackImpl::get_bpm() const{
-	return this->bpm.load();
 }
 
 

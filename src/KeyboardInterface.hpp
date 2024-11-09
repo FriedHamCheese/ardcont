@@ -1,6 +1,8 @@
 #ifndef keyboardinterface_hpp
 #define keyboardinterface_hpp
 
+#include "GlobalStates.hpp"
+
 #include <string>
 #include <iostream>
 
@@ -16,7 +18,6 @@ class KeyboardCin : public KeyboardInterface{
 	}
 };
 
-#ifndef ARDCONT_AUTOMATED_TEST
 class KeyboardMock : public KeyboardInterface{
 	public:
 	void getline(std::string& buffer) override{
@@ -30,20 +31,23 @@ class KeyboardMock : public KeyboardInterface{
 	std::string getline_mockstr;
 };
 
-void keyboard_listener(KeyboardInterface& keyboard_input);
+struct KeyboardListenerTestingFlags{
+	bool l_command_not_enough_arguments = false;
+	bool l_command_ntrbAudioBuffer_error = false;
+	bool l_command_id_not_a_number = false;
+	bool l_command_id_out_of_range = false;	
+	bool invalid_command = false;
+	
+	void clear_all(){
+		this->l_command_not_enough_arguments = false;
+		this->l_command_ntrbAudioBuffer_error = false;
+		this->l_command_id_not_a_number = false;
+		this->l_command_id_out_of_range = false;	
+		this->invalid_command = false;		
+	}
+};
 
-namespace keyboard_listener_test_flags{
-	inline bool l_command_not_enough_arguments = false;
-	inline bool l_command_ntrbAudioBuffer_error = false;
-	inline bool l_command_id_not_a_number = false;
-	inline bool l_command_id_out_of_range = false;	
-}
+void keyboard_listener(KeyboardInterface& keyboard_input, GlobalStates& global_states, 
+						KeyboardListenerTestingFlags* const testing_flags = nullptr);
 
-inline void clear_keyboard_listener_test_flags(){
-	keyboard_listener_test_flags::l_command_not_enough_arguments = false;
-	keyboard_listener_test_flags::l_command_ntrbAudioBuffer_error = false;
-	keyboard_listener_test_flags::l_command_id_not_a_number = false;
-	keyboard_listener_test_flags::l_command_id_out_of_range = false;
-}
-#endif
 #endif

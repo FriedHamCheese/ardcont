@@ -1,0 +1,35 @@
+#ifndef GLOBALSTATES_HPP
+#define GLOBALSTATES_HPP
+
+#include "AudioTrack.hpp"
+
+#include "ntrb/aud_std_fmt.h"
+
+#include <memory>
+#include <vector>
+#include <atomic>
+#include <cstdint>
+
+struct GlobalStates{
+	GlobalStates(){
+		this->reset_to_initial_state();
+	}
+	
+	void reset_to_initial_state(){
+		this->audio_tracks.clear();
+		this->requested_exit = false;
+	}
+
+	static constexpr std::uint16_t msecs_per_callback = 50;
+	std::vector<std::unique_ptr<AudioTrack>> audio_tracks;
+	std::atomic_bool requested_exit;
+	
+	std::uint32_t get_frames_per_callback() const{
+		return this->frames_per_callback;
+	}
+	
+	private:
+	std::uint32_t frames_per_callback = (ntrb_std_samplerate * msecs_per_callback) / 1000;
+};
+
+#endif
