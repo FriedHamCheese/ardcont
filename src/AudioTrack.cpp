@@ -29,7 +29,7 @@ AudioTrack::~AudioTrack(){
 		ntrb_AudioBuffer_free(&(this->stdaud_from_file));
 }
 
-void AudioTrack::load_track(){
+void AudioTrackImpl::load_track(){
 	std::lock_guard<std::mutex> stdaud_samples_access(this->sample_access_mutex);
 	this->samples.clear();
 
@@ -49,7 +49,7 @@ void AudioTrack::load_track(){
 	
 	if(not sample_buffer_loaded){
 		this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
-		std::cerr << "[Error]: AudioTrack::load_track(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
+		std::cerr << "[Error]: AudioTrackImpl::load_track(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
 			<< "\n\tSkipping audio loading callback...\n";
 		std::cout << ": " << std::flush;		
 	}
@@ -73,7 +73,7 @@ static std::string get_audio_info_filename_from_audio_filename(const std::string
 	}
 }
 
-ntrb_AudioBufferNew_Error AudioTrack::set_file_to_load_from(const char* const filename){
+ntrb_AudioBufferNew_Error AudioTrackImpl::set_file_to_load_from(const char* const filename){
 	std::lock_guard<std::mutex> _(this->sample_access_mutex);
 
 	if(this->initialised_stdaud_from_file)
@@ -128,10 +128,10 @@ ntrb_AudioBufferNew_Error AudioTrack::set_file_to_load_from(const char* const fi
 			}
 		}
 		catch(const std::invalid_argument& stox_not_a_number){
-			std::cerr << "[Error]: AudioTrack::set_file_to_load_from(): Data in " << keyword << " field is not a number.\n";
+			std::cerr << "[Error]: AudioTrackImpl::set_file_to_load_from(): Data in " << keyword << " field is not a number.\n";
 		}
 		catch(const std::out_of_range& stox_out_of_range){
-			std::cerr << "[Error]: AudioTrack::set_file_to_load_from(): Data in " << keyword << " field is either too small or too large.\n";
+			std::cerr << "[Error]: AudioTrackImpl::set_file_to_load_from(): Data in " << keyword << " field is either too small or too large.\n";
 		}
 	}
 	
@@ -145,7 +145,7 @@ ntrb_AudioBufferNew_Error AudioTrack::set_file_to_load_from(const char* const fi
 }
 
 
-bool AudioTrack::toggle_play_pause(){
+bool AudioTrackImpl::toggle_play_pause(){
 	if(this->initialised_stdaud_from_file){
 		const int stdaud_rwlock_acq_err = pthread_rwlock_rdlock(&(this->stdaud_from_file.buffer_access));
 		if(stdaud_rwlock_acq_err) return false;
@@ -164,28 +164,28 @@ bool AudioTrack::toggle_play_pause(){
 }
 
 
-std::mutex& AudioTrack::get_sample_access_mutex(){
+std::mutex& AudioTrackImpl::get_sample_access_mutex(){
 	return this->sample_access_mutex;
 }
 
-const std::vector<float>& AudioTrack::get_samples() const{
+const std::vector<float>& AudioTrackImpl::get_samples() const{
 	return this->samples;
 }
 
-void AudioTrack::fine_step_backward(){
+void AudioTrackImpl::fine_step_backward(){
 	this->speed_multiplier = this->speed_multiplier.load() - this->fine_step_speed_multiplier_delta;
 }
 
-void AudioTrack::fine_step_forward(){
+void AudioTrackImpl::fine_step_forward(){
 	this->speed_multiplier = this->speed_multiplier.load() + this->fine_step_speed_multiplier_delta;
 }
 
-void AudioTrack::set_destination_speed_multiplier(const float dest_speed_multiplier){
+void AudioTrackImpl::set_destination_speed_multiplier(const float dest_speed_multiplier){
 	this->destination_speed_multiplier = dest_speed_multiplier;
 }
 
 
-bool AudioTrack::set_loop(){
+bool AudioTrackImpl::set_loop(){
 	if(this->bpm.load() == 0.0) return true;
 	
 	const std::optional<std::uint32_t> nearest_loop_cue_point = this->find_nearest_loop_cue_point();
@@ -202,7 +202,7 @@ bool AudioTrack::set_loop(){
 	return true;
 }
 
-void AudioTrack::set_beats_per_loop(const float beats_per_loop){
+void AudioTrackImpl::set_beats_per_loop(const float beats_per_loop){
 	if(beats_per_loop != this->beats_per_loop.load()){
 		this->beats_per_loop = beats_per_loop;
 		std::cout << "Track " << std::uint16_t(this->track_id) << " beats per loop: " << beats_per_loop << '\n';
@@ -212,7 +212,7 @@ void AudioTrack::set_beats_per_loop(const float beats_per_loop){
 		this->loop_frame_end = this->loop_frame_begin.load() + (float)ntrb_std_samplerate * (60.0/(this->bpm.load())) * this->beats_per_loop.load();
 }
 
-void AudioTrack::cancel_loop(){
+void AudioTrackImpl::cancel_loop(){
 	if(this->loop_queued.load() == true){
 		this->loop_queued = false;
 		std::cout << "Track " << (std::uint16_t)this->track_id << " loop cancelled.\n";
@@ -220,7 +220,7 @@ void AudioTrack::cancel_loop(){
 	}
 }
 
-bool AudioTrack::cue_to_nearest_cue_point(){
+bool AudioTrackImpl::cue_to_nearest_cue_point(){
 	const std::optional<std::uint32_t> cue_point_frames = this->find_eariler_cue_point();
 	if(not cue_point_frames.has_value())
 		return false;
@@ -230,17 +230,17 @@ bool AudioTrack::cue_to_nearest_cue_point(){
 }
 
 
-std::uint8_t AudioTrack::get_track_id() const{
+std::uint8_t AudioTrackImpl::get_track_id() const{
 	return this->track_id;
 }
 
-float AudioTrack::get_bpm() const{
+float AudioTrackImpl::get_bpm() const{
 	return this->bpm.load();
 }
 
 
 //private methods
-bool AudioTrack::load_single_frame(){
+bool AudioTrackImpl::load_single_frame(){
 	const double this_frame_pos = this->regular_speed_stdaud_frames_pos.load();
 	const std::uint32_t this_frame_pos_floored = std::floor(this_frame_pos);
 	const std::uint32_t this_frame_pos_ceiled = std::ceil(this_frame_pos);
@@ -271,7 +271,7 @@ bool AudioTrack::load_single_frame(){
 	return true;
 }
 
-bool AudioTrack::fill_sample_buffer_while_in_loop(const std::uint32_t minimum_samples_in_sample_buffer){
+bool AudioTrackImpl::fill_sample_buffer_while_in_loop(const std::uint32_t minimum_samples_in_sample_buffer){
 	while(this->samples.size() < minimum_samples_in_sample_buffer){
 		this->stdaud_from_file.load_buffer_callback(&(this->stdaud_from_file));	
 		const ntrb_AudioBufferLoad_Error load_err = this->stdaud_from_file.load_err;
@@ -298,7 +298,7 @@ bool AudioTrack::fill_sample_buffer_while_in_loop(const std::uint32_t minimum_sa
 	return true;
 }
 
-bool AudioTrack::fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer){
+bool AudioTrackImpl::fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer){
 	while(this->samples.size() < minimum_samples_in_sample_buffer){
 		this->stdaud_from_file.load_buffer_callback(&(this->stdaud_from_file));	
 		const ntrb_AudioBufferLoad_Error load_err = this->stdaud_from_file.load_err;
@@ -319,7 +319,7 @@ bool AudioTrack::fill_sample_buffer(const std::uint32_t minimum_samples_in_sampl
 	return true;
 }
 
-std::optional<std::uint32_t> AudioTrack::find_nearest_loop_cue_point(){
+std::optional<std::uint32_t> AudioTrackImpl::find_nearest_loop_cue_point(){
 	const int stdaud_rwlock_acq_err = pthread_rwlock_rdlock(&(this->stdaud_from_file.buffer_access));
 	if(stdaud_rwlock_acq_err) return std::nullopt;
 	
@@ -342,7 +342,7 @@ std::optional<std::uint32_t> AudioTrack::find_nearest_loop_cue_point(){
 		return later_nearest_beat_in_frames;
 }
 
-std::optional<std::uint32_t> AudioTrack::find_eariler_cue_point(){
+std::optional<std::uint32_t> AudioTrackImpl::find_eariler_cue_point(){
 	const int stdaud_rwlock_acq_err = pthread_rwlock_rdlock(&(this->stdaud_from_file.buffer_access));
 	if(stdaud_rwlock_acq_err) return std::nullopt;
 	
@@ -357,7 +357,7 @@ std::optional<std::uint32_t> AudioTrack::find_eariler_cue_point(){
 	return earlier_nearest_beat_in_frames;
 }
 
-void AudioTrack::adjust_speed_multiplier(){
+void AudioTrackImpl::adjust_speed_multiplier(){
 	const float current_speed_multiplier = this->speed_multiplier.load();
 	const float current_destination_speed_multiplier = this->destination_speed_multiplier.load();
 	

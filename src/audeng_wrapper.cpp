@@ -20,21 +20,21 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 	
 	if(audeng_state::requested_exit.load()) return paComplete;
 	
-	for(AudioTrack& track : audeng_state::audio_tracks){
-		const bool got_mutex = track.get_sample_access_mutex().try_lock();
+	for(const std::unique_ptr<AudioTrack>& track : audeng_state::audio_tracks){
+		const bool got_mutex = track->get_sample_access_mutex().try_lock();
 		if(!got_mutex){
-			std::cerr << "\n[Warn]: audeng_wrapper: stream_audio(): Unable to acquire the sample access mutex of track " << (std::uint16_t)track.get_track_id()  << ".\n";
+			std::cerr << "\n[Warn]: audeng_wrapper: stream_audio(): Unable to acquire the sample access mutex of track " << (std::uint16_t)track->get_track_id()  << ".\n";
 			std::cout << ": " << std::flush;
 			continue;
 		}
 
-		const std::vector<float>& track_samples = track.get_samples();
+		const std::vector<float>& track_samples = track->get_samples();
 		for(size_t i = 0; i < stdaud_sample_count; i++)
 			mixed_output[i] += track_samples[i];
 		
-		track.get_sample_access_mutex().unlock();
+		track->get_sample_access_mutex().unlock();
 		
-		std::thread track_load_thread(AudioTrack::load_track, &track);
+		std::thread track_load_thread(AudioTrack::load_track, track.get());
 		track_load_thread.detach();
 	}
 	
