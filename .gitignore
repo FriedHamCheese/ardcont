@@ -4,3 +4,5 @@ build.exe
 libportaudio.dll
 *.exe
 *.o
+/doc/html
+/doc/latex

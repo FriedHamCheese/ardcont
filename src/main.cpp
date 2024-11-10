@@ -18,6 +18,11 @@
 #include <iostream>
 
 int main(){
+	#ifdef ARDCONT_AUTOMATED_TEST
+	std::cerr << "Running code compiled for automated test. Exiting...\n";
+	return 0;
+	#endif
+	
 	#ifdef NTRB_MEMDEBUG
 	ntrb_memdebug_init_with_return_value();
 	#endif

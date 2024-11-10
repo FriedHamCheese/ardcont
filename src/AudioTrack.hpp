@@ -1,3 +1,8 @@
+/**
+\file AudioTrack.hpp
+A file containing the AudioTrack interface and its implementation AudioTrackImpl.
+*/
+
 #ifndef AudioTrack_hpp
 #define AudioTrack_hpp
 
@@ -10,9 +15,21 @@
 #include <optional>
 #include <iostream>
 
+/**
+An interface for a turntable deck. Use AudioTrackImpl for actual usage in production code.
+*/
 class AudioTrack{
 	public:
+	/**
+	Initialises AudioTrack::sample_access_mutex, AudioTrack::samples; 
+	sets AudioTrack::minimum_frames_in_buffer and AudioTrack::track_id.
+	
+	\param[in] minimum_frames_in_buffer The exact amount of stdaud frames which the audio engine reads per callback.
+	\param[in] track_id track id which the interface represents.
+	*/
 	AudioTrack(const std::uint32_t minimum_frames_in_buffer, const uint8_t track_id);
+	
+	///Frees AudioTrack::stdaud_from_file if AudioTrack::initialised_stdaud_from_file is true.
 	~AudioTrack();
 	
 	virtual void load_track() = 0;
