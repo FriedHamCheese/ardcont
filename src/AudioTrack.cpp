@@ -95,14 +95,14 @@ ntrb_AudioBufferNew_Error AudioTrackImpl::set_file_to_load_from(const char* cons
 	if(aud_info_filename.empty()){
 		std::cerr << "[Warn]: Unable to form path to the audio info file."
 					<< "\n\t bpm is set to 0.0 and looping is unavaliable.\n";
-		return new_file_aud_err;		
+		return ntrb_AudioBufferNew_OK;		
 	}
 	
 	std::ifstream metadata_file(aud_info_filename);
 	if(!metadata_file){
 		std::cerr << "[Warn]: metadata for audio file not found."
 					<< "\n\t bpm is set to 0.0 and looping is unavaliable.\n";
-		return new_file_aud_err;
+		return ntrb_AudioBufferNew_OK;
 	}
 	
 	std::string keyword, value;
