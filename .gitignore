@@ -1,4 +1,4 @@
-
+makeconfig.make
 /bin
 build.exe
 libportaudio.dll

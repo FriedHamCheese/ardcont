@@ -8,6 +8,8 @@ NTRB_OBJFILES := $(wildcard $(NTRB_DIR)/bin/*.o)
 #imports NTRB_DEPENDENCY_INCLUDES, NTRB_LINKING_DEPENDENCIES and NTRB_COMPILING_SYMBOLS
 include $(NTRB_DIR)/makeconfig.make
 
+include makeconfig.make
+
 AUTOMATED_TEST := YES
 ifeq ($(AUTOMATED_TEST),YES)
 	AUTOMATED_TEST_MACRO := -DARDCONT_AUTOMATED_TEST
@@ -15,8 +17,8 @@ else
 	AUTOMATED_TEST_MACRO :=
 endif
 
-CXXFLAGS := -Wall -Wextra -g3 $(NTRB_DEPENDENCY_INCLUDES) -I$(NTRB_DIR)/include -I../serial-main/include -I./src $(NTRB_COMPILING_SYMBOLS) $(AUTOMATED_TEST_MACRO)
-LDLIBS := $(NTRB_LINKING_DEPENDENCIES) -L../serial-main/build -lserial -lsetupAPI
+CXXFLAGS := -Wall -Wextra -g3 $(NTRB_DEPENDENCY_INCLUDES) -I$(NTRB_DIR)/include $(SERIAL_INCLUDE) -I./src $(NTRB_COMPILING_SYMBOLS) $(AUTOMATED_TEST_MACRO)
+LDLIBS := $(NTRB_LINKING_DEPENDENCIES) $(SERIAL_LINKING_FLAGS)
 
 build.exe: $(NTRB_OBJFILES) $(OBJ_FILES)
 	$(CXX) -o $@ $^ $(LDLIBS)
@@ -24,8 +26,6 @@ build.exe: $(NTRB_OBJFILES) $(OBJ_FILES)
 $(OBJ_FILES): ./bin/%.o: ./src/%.cpp $(HEADER_FILES) | ./bin
 	$(CXX) $< -c $(CXXFLAGS) -o $@
 
-#GOOGLE_TEST_ includes
-include makeconfig.make
 OBJ_FILES_NO_MAIN := $(filter-out ./bin/main.o,$(OBJ_FILES))
 TESTING_HEADER_FILES := $(wildcard ./tests/*.hpp)
 
