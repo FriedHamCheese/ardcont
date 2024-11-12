@@ -5,20 +5,18 @@ OBJ_FILES := $(patsubst ./src/%.cpp,./bin/%.o,$(SRC_FILES))
 NTRB_DIR := ../naturau-base
 NTRB_OBJFILES := $(wildcard $(NTRB_DIR)/bin/*.o)
 
-AUTOMATED_TEST := NO
+#imports NTRB_DEPENDENCY_INCLUDES, NTRB_LINKING_DEPENDENCIES and NTRB_COMPILING_SYMBOLS
+include $(NTRB_DIR)/makeconfig.make
+
+AUTOMATED_TEST := YES
 ifeq ($(AUTOMATED_TEST),YES)
 	AUTOMATED_TEST_MACRO := -DARDCONT_AUTOMATED_TEST
-	TEST_EXECUTABLE := ./test.exe
 else
 	AUTOMATED_TEST_MACRO :=
-	TEST_EXECUTABLE :=
 endif
 
-CXXFLAGS := -Wall -Wextra -g3 -I../naturau-base/include -I../wjwwood-serial/include -I../portaudio/include -I../flac-1.4.3/include -I./src -DFLAC__NO_DLL -DNTRB_MEMDEBUG $(AUTOMATED_TEST_MACRO)
-LDLIBS := -L../flac-build/src/libFLAC -L../portaudio/build -L../wjwwood-serial/bin -lFLAC -lportaudio -lserial -lsetupAPI
-
-.PHONY: all
-all: build.exe $(TEST_EXECUTABLE)
+CXXFLAGS := -Wall -Wextra -g3 $(NTRB_DEPENDENCY_INCLUDES) -I$(NTRB_DIR)/include -I../serial-main/include -I./src $(NTRB_COMPILING_SYMBOLS) $(AUTOMATED_TEST_MACRO)
+LDLIBS := $(NTRB_LINKING_DEPENDENCIES) -L../serial-main/build -lserial -lsetupAPI
 
 build.exe: $(NTRB_OBJFILES) $(OBJ_FILES)
 	$(CXX) -o $@ $^ $(LDLIBS)
@@ -26,13 +24,12 @@ build.exe: $(NTRB_OBJFILES) $(OBJ_FILES)
 $(OBJ_FILES): ./bin/%.o: ./src/%.cpp $(HEADER_FILES) | ./bin
 	$(CXX) $< -c $(CXXFLAGS) -o $@
 
-
+#GOOGLE_TEST_ includes
+include makeconfig.make
 OBJ_FILES_NO_MAIN := $(filter-out ./bin/main.o,$(OBJ_FILES))
 TESTING_HEADER_FILES := $(wildcard ./tests/*.hpp)
-GOOGLE_TEST_INCLUDE := -I../googletest/googletest/include
-GOOGLE_TEST_OBJ := ..\googletest\build\googletest\CMakeFiles\gtest.dir\src\gtest-all.cc.obj
 
-$(TEST_EXECUTABLE): $(NTRB_OBJFILES) $(OBJ_FILES_NO_MAIN) ./tests/test_main.o
+./test.exe: $(NTRB_OBJFILES) $(OBJ_FILES_NO_MAIN) ./tests/test_main.o
 	$(CXX) -o $@ $^ $(GOOGLE_TEST_OBJ) $(LDLIBS)
 
 ./tests/test_main.o: ./tests/test_main.cpp $(HEADER_FILES) $(TESTING_HEADER_FILES)
@@ -47,8 +44,8 @@ clean: clean_build clean_test
 	
 .PHONY: clean_build
 clean_build:
-	rm ./build.exe
 	rm ./bin/*.o
+	rm ./build.exe
 	
 .PHONY: clean_test
 clean_test:
