@@ -18,11 +18,6 @@
 #include <iostream>
 
 int main(){
-	#ifdef ARDCONT_AUTOMATED_TEST
-	std::cerr << "Running code compiled for automated test. Exiting...\n";
-	return 0;
-	#endif
-	
 	#ifdef NTRB_MEMDEBUG
 	ntrb_memdebug_init_with_return_value();
 	#endif
@@ -39,9 +34,17 @@ int main(){
 		std::cout << std::flush;
 		
 		std::string selected_port_name;
-		std::cout << "Arduino port name: " << std::flush;
+		std::cout << "Arduino port name | quit | refresh: " << std::flush;
 		keyboard_cin.getline(selected_port_name);
 		
+		if(selected_port_name == "quit"){		
+			#ifdef NTRB_MEMDEBUG
+			ntrb_memdebug_uninit(true);
+			#endif
+			return 0;
+		}else if(selected_port_name == "refresh")
+			continue;
+
 		try{
 			arduino_serial.setPort(selected_port_name);
 			arduino_serial.open();
@@ -65,7 +68,7 @@ int main(){
 	global_states.audio_tracks.push_back(std::make_unique<AudioTrackImpl>(global_states.get_frames_per_callback(), 1));
 	
 	std::thread serial_thread(serial_listener, std::ref(arduino_serial), std::ref(global_states));
-	std::thread keyboard_thread(keyboard_listener, std::ref(keyboard_cin), std::ref(global_states), nullptr);
+	std::thread keyboard_thread(keyboard_listener, std::ref(keyboard_cin), std::ref(global_states));
 	std::thread audeng_thread(run_audio_engine, std::ref(global_states));
 
 	serial_thread.join();

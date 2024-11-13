@@ -267,7 +267,7 @@ bool AudioTrackImpl::fill_sample_buffer_while_in_loop(const std::uint32_t minimu
 		if(this->current_stdaud_frame.load() >= loop_frame_end_copy){
 			this->stdaud_from_file.stdaud_next_buffer_first_frame = this->loop_frame_begin;
 			this->current_stdaud_frame = this->loop_frame_begin;
-		}else 
+		}else
 			this->stdaud_from_file.stdaud_next_buffer_first_frame = this->current_stdaud_frame.load();
 	}
 	return true;
