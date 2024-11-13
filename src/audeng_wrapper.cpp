@@ -36,7 +36,7 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 		
 		track->get_sample_access_mutex().unlock();
 		
-		std::thread track_load_thread(AudioTrack::load_track, track.get());
+		std::thread track_load_thread(AudioTrack::load_samples, track.get());
 		track_load_thread.detach();
 	}
 	

@@ -17,7 +17,10 @@ A file containing the AudioTrack interface and its implementation AudioTrackImpl
 
 /**
 An interface for a turntable deck. Use AudioTrackImpl for actual usage in production code.
-\todo can most of the stuff be moved to the implementation?
+\todo 
+- hard to test stuff should not be tested and be in implementation,
+  easy to test can be in interface.
+- float/double inconsistency
 */
 class AudioTrack{
 	public:
@@ -33,23 +36,21 @@ class AudioTrack{
 	///Frees AudioTrack::stdaud_from_file if AudioTrack::initialised_stdaud_from_file is true.
 	~AudioTrack();
 	
-	/**
-	\todo call it load samples or smth
-	\todo enum as return and put reporting responsibility to whoever calls this function
-	
-	Loads the final audio of the deck to be played in an audio engine callback to AudioTrack::samples.
-	*/
-	virtual void load_track() = 0;
-	
-	/**
-	\todo separate initialisation of AudioTrack::stdaud_from_file from loading the audio info :D
-	
-	Sets the file which the deck will play (frees the previous audio file if needed), loads the info of the audio file,
-	and displays the deck info.
-	
+	///Loads the final audio of the deck to be played in an audio engine callback to AudioTrack::samples.
+	virtual void load_samples() = 0;
+	/**	
+	Sets the file which the deck will play (frees the previous audio file if needed).
 	Error from initialising an ntrb_AudioBuffer for the file is returned.
 	*/
 	virtual ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback) = 0;
+	/**
+	Loads audio info file from aud_filename, usually by reading from a file which has the extension of aud_filename replaced with .txt.
+	
+	Errors are displayed through std::cerr.
+	*/
+	virtual void load_audio_info(const std::string& aud_filename) = 0;
+	///Displays the details of the deck through std::cout.
+	virtual void display_deck_info() = 0;
 	
 	/**
 	If play, pauses; if pause, plays :D
@@ -63,7 +64,9 @@ class AudioTrack{
 		return this->sample_access_mutex;
 	}
 	///Get a const reference to AudioTrack::samples.
-	virtual const std::vector<float>& get_samples() const = 0;
+	const std::vector<float>& get_samples() const{
+		return this->samples;
+	}
 	
 	///Jogs the deck to play at a slightly slower speed temporarily.
 	virtual void fine_step_backward() = 0;
@@ -101,7 +104,7 @@ class AudioTrack{
 	protected:
 	/**
 	Append a single frame (both left and right samples) to AudioTrack::samples while taking playback speed into account,
-	increment AudioTrack::regular_speed_stdaud_frames_pos by AudioTrack::speed_multiplier 
+	increment AudioTrack::current_stdaud_frame by AudioTrack::speed_multiplier 
 	and call AudioTrack::adjust_speed_multiplier.
 	
 	If the frame to load is not within the boundary of the underlying AudioTrack::ntrb_AudioBuffer, the function returns false, notifying to the caller to load the ntrb_AudioBuffer and call this function again to append to AudioTrack::samples.
@@ -112,7 +115,7 @@ class AudioTrack{
 	and guaranteeing no garbage is in AudioTrack::samples by 0 filling AudioTrack::samples
 	if AudioTrack::in_pause_state is true or the underlying AudioTrack::stdaud_from_file encounters any errors.
 	
-	The function keeps AudioTrack::regular_speed_stdaud_frames_pos to be within 
+	The function keeps AudioTrack::current_stdaud_frame to be within 
 	AudioTrack::loop_frame_begin and AudioTrack::loop_frame_end at all times to create an audio loop.
 	
 	\return false for any errors from loading AudioTrack::stdaud_from_file but not for ntrb_AudioBufferLoad_EOF.
@@ -131,13 +134,13 @@ class AudioTrack{
 	virtual bool fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer) = 0;
 	
 	/**
-	Return a stdaud frame number representing the nearest beat (or cue point) to AudioTrack::regular_speed_stdaud_frames_pos. 
+	Return a stdaud frame number representing the nearest beat (or cue point) to AudioTrack::current_stdaud_frame. 
 	Returns a std::nullopt if couldn't acquire a rdlock of AudioTrack::stdaud_from_file.
 	*/
 	virtual std::optional<std::uint32_t> find_nearest_loop_cue_point() = 0;
 	
 	/**
-	Return a stdaud frame number representing the beat (or cue point) prior to AudioTrack::regular_speed_stdaud_frames_pos.
+	Return a stdaud frame number representing the beat (or cue point) prior to AudioTrack::current_stdaud_frame.
 	Returns a std::nullopt if couldn't acquire a rdlock of AudioTrack::stdaud_from_file.
 	*/
 	virtual std::optional<std::uint32_t> find_eariler_cue_point() = 0;
@@ -150,8 +153,7 @@ class AudioTrack{
 	///A vector containing the final stdaud frames of the deck for an audio engine callback.
 	std::vector<float> samples;
 	///The number of frames to be in AudioTrack::samples which an AudioTrack must provide for the audio engine callback.
-	///\todo why isnt this const
-	std::uint32_t minimum_frames_in_buffer;
+	const std::uint32_t minimum_frames_in_buffer;
 
 	///To queue or not to queue loading from AudioTrack::stdaud_from_file.
 	///No garbage should be present in AudioTrack::samples in both conditions,
@@ -161,10 +163,8 @@ class AudioTrack{
 	 * The stdaud frame which an AudioTrack is at. 
 	 * This has to be incremented by AudioTrack::speed_multiplier.
 	 * This can be used to set the start of AudioTrack::stdaud_from_file.
-	 *
-	 * \todo the name is fucking long
 	 * */
-	std::atomic<double> regular_speed_stdaud_frames_pos = 0;
+	std::atomic<double> current_stdaud_frame = 0;
 	
 	/**
 	 * The underlying object which contains a buffer of stdaud frames of an audio file to play from.  
@@ -177,7 +177,7 @@ class AudioTrack{
 	/**
 	 The ratio of speed at which the AudioTrack plays at.
 	 
-	 This can directly be used to increment AudioTrack::regular_speed_stdaud_frames_pos,
+	 This can directly be used to increment AudioTrack::current_stdaud_frame,
 	 as 1x means incrementing one frame after another, 0.5 is play the same frame twice 
 	 and 2x means skip every other frame, etc.
 
@@ -193,8 +193,6 @@ class AudioTrack{
 	static constexpr float speed_multiplier_recovering_seconds = 0.5;
 	///AudioTrack::speed_multiplier_recovering_seconds but as stdaud frame count actual calculations in AudioTrack::adjust_speed_multiplier.
 	static constexpr float speed_multiplier_recovering_frames = speed_multiplier_recovering_seconds * 48000.0;
-	///\todo wait this should be in the function wtf
-	std::atomic<float> speed_multiplier_recovering_per_frame = 1.0;
 	///The speed multiplier change for a jog click.
 	static constexpr float fine_step_speed_multiplier_delta = 0.05;
 
@@ -237,7 +235,7 @@ class AudioTrackImpl : public AudioTrack{
 	- the underlying pure stdaud read from ntrb_AudioBuffer failing to read its audio file, reported through std::cerr
 	- AudioTrack::stdaud_from_file reaching EOF, reported through std::cout
 	*/
-	void load_track();
+	void load_samples();
 	
 	/**
 	Sets the file which the deck will play (frees the previous audio file if needed), loads the info of the audio file,
@@ -246,8 +244,10 @@ class AudioTrackImpl : public AudioTrack{
 	Error from initialising an ntrb_AudioBuffer for the file is returned; but the ones related to loading the audio info is reported through std::cerr.
 	*/
 	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback);
+	void load_audio_info(const std::string& aud_filename);
+	void display_deck_info();
+
 	bool toggle_play_pause();
-	const std::vector<float>& get_samples() const;
 	
 	void fine_step_backward();
 	void fine_step_forward();

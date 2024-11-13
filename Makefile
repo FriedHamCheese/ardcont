@@ -10,7 +10,7 @@ include $(NTRB_DIR)/makeconfig.make
 
 include makeconfig.make
 
-AUTOMATED_TEST := YES
+AUTOMATED_TEST := NO
 ifeq ($(AUTOMATED_TEST),YES)
 	AUTOMATED_TEST_MACRO := -DARDCONT_AUTOMATED_TEST
 else
@@ -49,5 +49,5 @@ clean_build:
 	
 .PHONY: clean_test
 clean_test:
-	rm ./test.exe
 	rm ./tests/test_main.o
+	rm ./test.exe

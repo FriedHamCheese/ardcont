@@ -60,7 +60,9 @@ void keyboard_listener(KeyboardInterface& keyboard_input, GlobalStates& global_s
 
 			try{
 				const std::uint8_t track_id = std::stoi(arg_str.substr(0, first_arg_separator_index));
-				const ntrb_AudioBufferNew_Error new_aud_err = global_states.audio_tracks.at(track_id)->set_file_to_load_from(arg_str.substr(first_arg_separator_index+1).c_str(), global_states.get_frames_per_callback());
+				const std::string aud_filename = arg_str.substr(first_arg_separator_index+1);
+				const std::unique_ptr<AudioTrack>& deck_ptr = global_states.audio_tracks.at(track_id);
+				const ntrb_AudioBufferNew_Error new_aud_err = deck_ptr->set_file_to_load_from(aud_filename.c_str(), global_states.get_frames_per_callback());
 				if(new_aud_err){
 					#ifndef ARDCONT_AUTOMATED_TEST						
 					std::cerr << "[Error]: keyboard_listener(): Error setting a new track."
@@ -68,7 +70,14 @@ void keyboard_listener(KeyboardInterface& keyboard_input, GlobalStates& global_s
 					#else
 					testing_flags->l_command_ntrbAudioBuffer_error = true;
 					#endif
+				}else{
+					#ifndef ARDCONT_AUTOMATED_TEST
+					deck_ptr->load_audio_info(aud_filename);
+					#endif
 				}
+				#ifndef ARDCONT_AUTOMATED_TEST
+				deck_ptr->display_deck_info();
+				#endif
 			}
 			catch(const std::invalid_argument& stoi_fmt_err){
 				#ifndef ARDCONT_AUTOMATED_TEST

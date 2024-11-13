@@ -29,7 +29,7 @@ AudioTrack::~AudioTrack(){
 		ntrb_AudioBuffer_free(&(this->stdaud_from_file));
 }
 
-void AudioTrackImpl::load_track(){
+void AudioTrackImpl::load_samples(){
 	std::lock_guard<std::mutex> stdaud_samples_access(this->sample_access_mutex);
 	this->samples.clear();
 
@@ -49,7 +49,7 @@ void AudioTrackImpl::load_track(){
 	
 	if(not sample_buffer_loaded){
 		this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
-		std::cerr << "[Error]: AudioTrackImpl::load_track(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
+		std::cerr << "[Error]: AudioTrackImpl::load_samples(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
 			<< "\n\tSkipping audio loading callback...\n";
 		std::cout << ": " << std::flush;		
 	}
@@ -63,16 +63,6 @@ void AudioTrackImpl::load_track(){
 }
 
 
-static std::string get_audio_info_filename_from_audio_filename(const std::string&& aud_filename){
-	const std::size_t filetype_separator_index = aud_filename.rfind('.');
-	if(filetype_separator_index == std::string::npos)
-		return std::string();
-	else{
-		const std::string before_separator = aud_filename.substr(0, filetype_separator_index);
-		return before_separator + ".txt";
-	}
-}
-
 ntrb_AudioBufferNew_Error AudioTrackImpl::set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback){
 	std::lock_guard<std::mutex> _(this->sample_access_mutex);
 
@@ -84,29 +74,33 @@ ntrb_AudioBufferNew_Error AudioTrackImpl::set_file_to_load_from(const char* cons
 
 	this->initialised_stdaud_from_file = true;
 	this->audfile_name = filename;
-	
 	this->loop_queued = false;
+	this->current_stdaud_frame = 0.0;
+	return new_file_aud_err;
+}
+
+
+void AudioTrackImpl::load_audio_info(const std::string& aud_filename){
 	this->bpm = 0.0;
 	this->first_beat_stdaud_frame = 0;
 	
-	this->regular_speed_stdaud_frames_pos = 0.0;
-	
-	const std::string aud_info_filename = get_audio_info_filename_from_audio_filename(filename);
-	if(aud_info_filename.empty()){
-		std::cerr << "[Warn]: Unable to form path to the audio info file."
-					<< "\n\t bpm is set to 0.0 and looping is unavaliable.\n";
-		return ntrb_AudioBufferNew_OK;		
+	std::string aud_info_filename;
+	const std::size_t filetype_separator_index = aud_filename.rfind('.');
+	if(filetype_separator_index == std::string::npos)
+		aud_info_filename =  aud_filename + ".txt";
+	else{
+		const std::string before_separator = aud_filename.substr(0, filetype_separator_index);
+		aud_info_filename = before_separator + ".txt";
 	}
 	
 	std::ifstream metadata_file(aud_info_filename);
 	if(!metadata_file){
 		std::cerr << "[Warn]: metadata for audio file not found."
-					<< "\n\t bpm is set to 0.0 and looping is unavaliable.\n";
-		return ntrb_AudioBufferNew_OK;
+					<< "\n\t bpm is set to 0.0, cueing and looping is unavaliable.\n";
+		return;
 	}
 	
 	std::string keyword, value;
-	
 	while(metadata_file >> keyword >> value){
 		try{
 			if(keyword == "bpm") this->bpm = std::stof(value);
@@ -134,16 +128,15 @@ ntrb_AudioBufferNew_Error AudioTrackImpl::set_file_to_load_from(const char* cons
 			std::cerr << "[Error]: AudioTrackImpl::set_file_to_load_from(): Data in " << keyword << " field is either too small or too large.\n";
 		}
 	}
-	
-	std::cout << "\nTrack " << (std::uint16_t)this->track_id
-			<< "\n\tAudio filename: " << this->audfile_name
-			<< "\n\tTrack paused: " <<  this->in_pause_state.load()
-			<< "\n\tbpm: " << this->bpm.load()
-			<< "\n\tFirst beat at " << (float)this->first_beat_stdaud_frame / (float)ntrb_std_samplerate << " seconds." << std::endl;
-	
-	return new_file_aud_err;
 }
 
+void AudioTrackImpl::display_deck_info(){
+	std::cout << "\nTrack " << (std::uint16_t)this->track_id
+				<< "\n\tAudio filename: " << this->audfile_name
+				<< "\n\tTrack paused: " <<  this->in_pause_state.load()
+				<< "\n\tbpm: " << this->bpm.load()
+				<< "\n\tFirst beat at " << (float)this->first_beat_stdaud_frame / (float)ntrb_std_samplerate << " seconds." << std::endl;
+}
 
 bool AudioTrackImpl::toggle_play_pause(){
 	if(this->initialised_stdaud_from_file){
@@ -161,10 +154,6 @@ bool AudioTrackImpl::toggle_play_pause(){
 
 	this->in_pause_state = !(this->in_pause_state.load());
 	return true;
-}
-
-const std::vector<float>& AudioTrackImpl::get_samples() const{
-	return this->samples;
 }
 
 void AudioTrackImpl::fine_step_backward(){
@@ -220,14 +209,14 @@ bool AudioTrackImpl::cue_to_nearest_cue_point(){
 	if(not cue_point_frames.has_value())
 		return false;
 	
-	this->regular_speed_stdaud_frames_pos = cue_point_frames.value();
+	this->current_stdaud_frame = cue_point_frames.value();
 	return true;
 }
 
 
 //private methods
 bool AudioTrackImpl::load_single_frame(){
-	const double this_frame_pos = this->regular_speed_stdaud_frames_pos.load();
+	const double this_frame_pos = this->current_stdaud_frame.load();
 	const std::uint32_t this_frame_pos_floored = std::floor(this_frame_pos);
 	const std::uint32_t this_frame_pos_ceiled = std::ceil(this_frame_pos);
 
@@ -251,7 +240,7 @@ bool AudioTrackImpl::load_single_frame(){
 	
 	this->samples.push_back(left_channel_value);
 	this->samples.push_back(right_channel_value);	
-	this->regular_speed_stdaud_frames_pos = this_frame_pos + this->speed_multiplier.load();
+	this->current_stdaud_frame = this_frame_pos + this->speed_multiplier.load();
 	
 	this->adjust_speed_multiplier();
 	return true;
@@ -272,14 +261,14 @@ bool AudioTrackImpl::fill_sample_buffer_while_in_loop(const std::uint32_t minimu
 		
 		while(this->samples.size() < minimum_samples_in_sample_buffer){
 			const bool has_next_frame_in_file_aud_buffer = this->load_single_frame();
-			if(!has_next_frame_in_file_aud_buffer || this->regular_speed_stdaud_frames_pos.load() >= loop_frame_end_copy) break;
+			if(!has_next_frame_in_file_aud_buffer || this->current_stdaud_frame.load() >= loop_frame_end_copy) break;
 		}
 		
-		if(this->regular_speed_stdaud_frames_pos.load() >= loop_frame_end_copy){
+		if(this->current_stdaud_frame.load() >= loop_frame_end_copy){
 			this->stdaud_from_file.stdaud_next_buffer_first_frame = this->loop_frame_begin;
-			this->regular_speed_stdaud_frames_pos = this->loop_frame_begin;
+			this->current_stdaud_frame = this->loop_frame_begin;
 		}else 
-			this->stdaud_from_file.stdaud_next_buffer_first_frame = this->regular_speed_stdaud_frames_pos.load();
+			this->stdaud_from_file.stdaud_next_buffer_first_frame = this->current_stdaud_frame.load();
 	}
 	return true;
 }
@@ -300,7 +289,7 @@ bool AudioTrackImpl::fill_sample_buffer(const std::uint32_t minimum_samples_in_s
 			if(!has_next_frame_in_file_aud_buffer) break;
 		}
 		
-		this->stdaud_from_file.stdaud_next_buffer_first_frame = this->regular_speed_stdaud_frames_pos.load();
+		this->stdaud_from_file.stdaud_next_buffer_first_frame = this->current_stdaud_frame.load();
 	}
 	return true;
 }
@@ -347,12 +336,12 @@ void AudioTrackImpl::adjust_speed_multiplier(){
 	const float current_speed_multiplier = this->speed_multiplier.load();
 	const float current_destination_speed_multiplier = this->destination_speed_multiplier.load();
 	
-	this->speed_multiplier_recovering_per_frame = std::fabs((current_speed_multiplier - current_destination_speed_multiplier) / this->speed_multiplier_recovering_frames);
+	const float speed_multiplier_recovering_per_frame = std::fabs((current_speed_multiplier - current_destination_speed_multiplier) / this->speed_multiplier_recovering_frames);
 	
 	if(ntrb_float_equal(current_speed_multiplier, current_destination_speed_multiplier, 0.01))
 		this->speed_multiplier = current_destination_speed_multiplier;
 	else if(this->speed_multiplier.load() > this->destination_speed_multiplier.load())
-		this->speed_multiplier = current_speed_multiplier - this->speed_multiplier_recovering_per_frame.load();
+		this->speed_multiplier = current_speed_multiplier - speed_multiplier_recovering_per_frame;
 	else
-		this->speed_multiplier = current_speed_multiplier + this->speed_multiplier_recovering_per_frame.load();
+		this->speed_multiplier = current_speed_multiplier + speed_multiplier_recovering_per_frame;
 }
