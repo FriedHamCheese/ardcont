@@ -1,4 +1,5 @@
 #include "Sensor.hpp"
+#include "SensorID.hpp"
 
 #include <stdlib.h>
 #include <string.h>
@@ -6,19 +7,19 @@
 constexpr size_t sensor_count = 12;
 static Sensor* sensors[sensor_count];
 
-Button left_play_pause_button(12, 0);
-Button left_cue_button(11, 1);
-AnalogSensor  left_tempo_potentiometer(0, 2);
-RotaryEncoder left_loop_interval_rotaryenc(8, 7, 3);
-Button left_loop_in_button(9, 4);
-Button left_loop_out_button(10, 5);
+DigitalSensor left_play_pause_button(12, SensorID_left_playpause_button);
+DigitalSensor left_cue_button(11, SensorID_left_cue_button);
+AnalogSensor  left_tempo_potentiometer(0, SensorID_left_tempo_poten);
+RotaryEncoder left_loop_interval_rotaryenc(8, 7, SensorID_left_jogdial_rotaryenc);
+DigitalSensor left_loop_in_button(9, SensorID_left_loop_in_button);
+DigitalSensor left_loop_out_button(10, SensorID_left_loop_out_button);
 
-Button right_play_pause_button(13, 6);
-AnalogAsDigitalSensor right_cue_button(1, 7);
-AnalogSensor right_tempo_potentiometer(2, 8);
-RotaryEncoder right_loop_interval_rotaryenc(4, 3, 9);
-Button right_loop_in_button(2, 10);
-AnalogAsDigitalSensor right_loop_out_button(3, 11);
+DigitalSensor right_play_pause_button(13, SensorID_right_playpause_button);
+AnalogAsDigitalSensor right_cue_button(1, SensorID_right_cue_button);
+AnalogSensor right_tempo_potentiometer(2, SensorID_right_tempo_poten);
+RotaryEncoder right_loop_interval_rotaryenc(4, 3, SensorID_right_jogdial_rotaryenc);
+DigitalSensor right_loop_in_button(2, SensorID_right_loop_in_button);
+AnalogAsDigitalSensor right_loop_out_button(3, SensorID_right_loop_out_button);
 
 
 void setup() {

@@ -1,15 +1,7 @@
-#ifndef SENSOR_HPP
-#define SENSOR_HPP
+#ifndef ARDCONT_SENSOR_HPP
+#define ARDCONT_SENSOR_HPP
 
 #include <stdint.h>
-
-enum ButtonState : int16_t{
-	ButtonState_Untouched,
-	ButtonState_Pressed,
-  
-	ButtonState_Held,
-	ButtonState_Released,
-};
 
 class Sensor{
   public:
@@ -31,15 +23,6 @@ class DigitalSensor : public Sensor{
   bool read() override;
 };
 
-class Button : public Sensor{
-  public:
-  Button(const uint8_t pin, const uint8_t id);
-  bool read() override;  
-
-  protected:
-  unsigned long last_pressed_ms;
-};
-
 class AnalogSensor : public Sensor{
   protected:
   static constexpr int16_t analog_error_range = 2;
@@ -53,6 +36,9 @@ class AnalogAsDigitalSensor : public Sensor{
   public:
   AnalogAsDigitalSensor(const uint8_t pin, const uint8_t id);
   bool read() override;
+
+  private:
+  static constexpr int HIGH_adc_threshold = (1023 * 3) / 5;
 };
 
 class RotaryEncoder : public Sensor{

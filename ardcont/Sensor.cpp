@@ -21,35 +21,6 @@ bool DigitalSensor::read(){
     return this->value != this->prev_value;
 }
 
-Button::Button(const uint8_t pin, const uint8_t id)
-: 	Sensor(pin, id, ButtonState_Untouched)
-{
-    pinMode(this->pin, INPUT);
-}
-
-bool Button::read(){
-	const int current_sensor_value = digitalRead(this->pin);
-	if(current_sensor_value == HIGH && (this->value == ButtonState_Untouched || this->value == ButtonState_Released)){
-		this->value = ButtonState_Pressed;
-		this->last_pressed_ms = millis();
-		return true;
-	}
-	else if(current_sensor_value == HIGH && this->value == ButtonState_Pressed){
-		const unsigned long current_ms = millis();
-		constexpr unsigned long pressed_ms_threshold = 125;
-		if (current_ms >= (this->last_pressed_ms + pressed_ms_threshold)){
-			this->value = ButtonState_Held;
-			return true;
-		}
-	}
-	else if(current_sensor_value == LOW && (this->value == ButtonState_Pressed || this->value == ButtonState_Held)){
-		this->value = ButtonState_Released;
-		return true;
-	}
-	return false;
-}
-
-
 AnalogSensor::AnalogSensor(const uint8_t pin, const uint8_t id)
 : 	Sensor(pin, id, 0)
 {
@@ -69,8 +40,7 @@ bool AnalogSensor::read(){
 AnalogAsDigitalSensor::AnalogAsDigitalSensor(const uint8_t pin, const uint8_t id)
 : Sensor(pin, id, LOW)
 {
-  constexpr int HIGH_adc_threshold = (1023 * 3) / 5;
-  if(analogRead(this->pin) >= HIGH_adc_threshold)
+  if(analogRead(this->pin) >= AnalogAsDigitalSensor::HIGH_adc_threshold)
     this->value = HIGH;
   else
     this->value = LOW;
@@ -79,12 +49,10 @@ AnalogAsDigitalSensor::AnalogAsDigitalSensor(const uint8_t pin, const uint8_t id
 }
 
 bool AnalogAsDigitalSensor::read(){
-  constexpr int HIGH_adc_threshold = (1023*3) / 5;
-
   this->prev_value = this->value;
 
   const int read_adc = analogRead(this->pin);
-  if(read_adc >= HIGH_adc_threshold) this->value = HIGH;
+  if(read_adc >= AnalogAsDigitalSensor::HIGH_adc_threshold) this->value = HIGH;
   else this->value = LOW;
 
   return this->prev_value != this->value;

@@ -2,12 +2,125 @@
 #include "GlobalStates.hpp"
 #include "sensor.hpp"
 
+#include "../ardcont/SensorID.hpp"
+
 #include "serial/serial.h"
 
+#include <cstdint>
 #include <string>
 #include <iostream>
 
+bool write_to_sensor(std::vector<std::unique_ptr<Sensor>>& sensors, 
+						const std::int16_t sensor_id, const std::int16_t sensor_value)
+{
+	for(auto& sensor : sensors){
+		if(sensor->sensor_id == sensor_id){
+			sensor->write(sensor_value);
+			return true;
+		}
+	}
+	return false;
+}
+
+void translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, GlobalStates& global_states){	
+	for(auto& sensor : sensors){
+		if(sensor->value_changed()) continue;
+		
+		switch(sensor->sensor_id){
+			case SensorID_left_playpause_button:
+				if(sensor->value == ButtonState_Released){
+					if(!global_states.audio_tracks[0]->toggle_play_pause()){
+						std::cerr << "[Error]: serial_listener(): Unable to toggle play-pause due to rwlock acquisition error.\n";
+						std::cout << ": " << std::flush;
+					}
+				}
+				break;
+			case SensorID_left_cue_button:
+				if(sensor->value == ButtonState_Released)
+					global_states.audio_tracks[0]->cue_to_nearest_cue_point();
+				break;
+			case SensorID_left_tempo_poten:{
+				const float speed_multiplier = 1.0 + ((float)(sensor->value - potentiometer_centre_value) / potentiometer_value_for_max_range);
+				global_states.audio_tracks[0]->set_destination_speed_multiplier(speed_multiplier);
+				std::cout << "Track 0 bpm: " << speed_multiplier * global_states.audio_tracks[0]->get_bpm() << "x.\n";
+				std::cout << ": " << std::flush;
+				break;
+			}	
+			case SensorID_left_jogdial_rotaryenc:
+				if(sensor->value == 1)
+					global_states.audio_tracks[0]->fine_step_forward();
+				else if(sensor->value == -1)
+					global_states.audio_tracks[0]->fine_step_backward();						
+				break;
+			case SensorID_left_loop_in_button:
+				if(sensor->value == ButtonState_Released){
+					if(!global_states.audio_tracks[0]->set_loop()){
+						std::cerr << "[Error]: serial_listener(): Unable to set loop cue due to rwlock acquisition error.\n";
+						std::cout << ": " << std::flush;
+					}
+				}
+				break;					
+			case SensorID_left_loop_out_button:
+				if(sensor->value == ButtonState_Released) global_states.audio_tracks[0]->cancel_loop();
+				break;
+				
+			case SensorID_right_playpause_button:
+				if(sensor->value == ButtonState_Released){
+					if(!global_states.audio_tracks[1]->toggle_play_pause()){
+						std::cerr << "[Error]: serial_listener(): Unable to toggle play-pause due to rwlock acquisition error.\n";
+						std::cout << ": " << std::flush;
+					}
+				}
+				break;
+			case SensorID_right_cue_button:
+				if(sensor->value == ButtonState_Released)
+					global_states.audio_tracks[1]->cue_to_nearest_cue_point();
+				break;
+			case SensorID_right_tempo_poten:{	
+				const float speed_multiplier = 1.0 + ((float)(sensor->value - potentiometer_centre_value) / potentiometer_value_for_max_range);
+				global_states.audio_tracks[1]->set_destination_speed_multiplier(speed_multiplier);
+				std::cout << "Track 1 bpm: " << speed_multiplier * global_states.audio_tracks[1]->get_bpm() << "x.\n";
+				std::cout << ": " << std::flush;
+				break;
+			}
+			case SensorID_right_jogdial_rotaryenc:
+				if(sensor->value == 1)
+					global_states.audio_tracks[1]->fine_step_forward();
+				else if(sensor->value == -1)
+					global_states.audio_tracks[1]->fine_step_backward();	
+				break;				
+			case SensorID_right_loop_in_button:
+				if(sensor->value == 3){
+					if(!global_states.audio_tracks[1]->set_loop()){
+						std::cerr << "[Error]: serial_listener(): Unable to set loop cue due to rwlock acquisition error.\n";
+						std::cout << ": " << std::flush;
+					}
+				}
+				break;					
+			case SensorID_right_loop_out_button:
+				if(sensor->value == ButtonState_Released) global_states.audio_tracks[1]->cancel_loop();
+				break;
+		}
+	}
+}
+
 void serial_listener(SerialInterface& arduino_serial, GlobalStates& global_states){
+	std::vector<std::unique_ptr<Sensor>> sensors;
+	sensors.reserve(12);
+	sensors.emplace_back(std::make_unique<Button>(SensorID_left_playpause_button));
+	sensors.emplace_back(std::make_unique<Button>(SensorID_left_cue_button));
+	sensors.emplace_back(std::make_unique<Sensor>(SensorID_left_tempo_poten));
+	sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_left_jogdial_rotaryenc));
+	sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_in_button));
+	sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_out_button));
+	
+	sensors.emplace_back(std::make_unique<Button>(SensorID_right_playpause_button));
+	sensors.emplace_back(std::make_unique<Button>(SensorID_right_cue_button));
+	sensors.emplace_back(std::make_unique<Sensor>(SensorID_right_tempo_poten));
+	sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_right_jogdial_rotaryenc));
+	sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_in_button));
+	sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_out_button));
+	
 	std::string buffer;
 	
 	while(true){
@@ -25,82 +138,9 @@ void serial_listener(SerialInterface& arduino_serial, GlobalStates& global_state
 		try{
 			const int sensor_id = std::stoi(buffer.substr(0, comma_index));
 			const int sensor_value = std::stoi(buffer.substr(comma_index+1));
-			
-			switch(sensor_id){
-				case SensorID_left_playpause_button:
-					if(sensor_value == ButtonState_Released){
-						if(!global_states.audio_tracks[0]->toggle_play_pause()){
-							std::cerr << "[Error]: serial_listener(): Unable to toggle play-pause due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;
-						}
-					}
-					break;
-				case SensorID_left_cue_button:
-					if(sensor_value == ButtonState_Released)
-						global_states.audio_tracks[0]->cue_to_nearest_cue_point();
-					break;
-				case SensorID_left_tempo_poten:{
-					const float speed_multiplier = 1.0 + ((float)(sensor_value - potentiometer_centre_value) / potentiometer_value_for_max_range);
-					global_states.audio_tracks[0]->set_destination_speed_multiplier(speed_multiplier);
-					std::cout << "Track 0 bpm: " << speed_multiplier * global_states.audio_tracks[0]->get_bpm() << "x.\n";
-					std::cout << ": " << std::flush;
-					break;
-				}	
-				case SensorID_left_loop_duration_rotaryenc:
-					if(sensor_value == 1)
-						global_states.audio_tracks[0]->fine_step_forward();
-					else if(sensor_value == -1)
-						global_states.audio_tracks[0]->fine_step_backward();						
-					break;
-				case SensorID_left_loop_in_button:
-					if(sensor_value == ButtonState_Released){
-						if(!global_states.audio_tracks[0]->set_loop()){
-							std::cerr << "[Error]: serial_listener(): Unable to set loop cue due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;
-						}
-					}
-					break;					
-				case SensorID_left_loop_out_button:
-					if(sensor_value == ButtonState_Released) global_states.audio_tracks[0]->cancel_loop();
-					break;
-					
-				case SensorID_right_playpause_button:
-					if(sensor_value == ButtonState_Released){
-						if(!global_states.audio_tracks[1]->toggle_play_pause()){
-							std::cerr << "[Error]: serial_listener(): Unable to toggle play-pause due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;
-						}
-					}
-					break;
-				case SensorID_right_cue_button:
-					if(sensor_value)
-						global_states.audio_tracks[1]->cue_to_nearest_cue_point();
-					break;
-				case SensorID_right_tempo_poten:{	
-					const float speed_multiplier = 1.0 + ((float)(sensor_value - potentiometer_centre_value) / potentiometer_value_for_max_range);
-					global_states.audio_tracks[1]->set_destination_speed_multiplier(speed_multiplier);
-					std::cout << "Track 1 bpm: " << speed_multiplier * global_states.audio_tracks[1]->get_bpm() << "x.\n";
-					std::cout << ": " << std::flush;
-					break;
-				}
-				case SensorID_right_loop_duration_rotaryenc:
-					if(sensor_value == 1)
-						global_states.audio_tracks[1]->fine_step_forward();
-					else if(sensor_value == -1)
-						global_states.audio_tracks[1]->fine_step_backward();	
-					break;				
-				case SensorID_right_loop_in_button:
-					if(sensor_value == 3){
-						if(!global_states.audio_tracks[1]->set_loop()){
-							std::cerr << "[Error]: serial_listener(): Unable to set loop cue due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;
-						}
-					}
-					break;					
-				case SensorID_right_loop_out_button:
-					if(sensor_value) global_states.audio_tracks[1]->cancel_loop();
-					break;					
-			}
+			write_to_sensor(sensors, sensor_id, sensor_value);
+			translate_sensor_changes(sensors, global_states);
+
 		}catch(const std::invalid_argument& not_a_number){
 			std::cerr << "\n[Warn]: serial_listener(): recieved text instead of number.";
 			std::cerr << "\n\tRead text: " << buffer << std::flush;

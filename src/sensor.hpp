@@ -1,37 +1,46 @@
-#ifndef sensor_hpp
-#define sensor_hpp
+#ifndef SENSOR_HPP
+#define SENSOR_HPP
 
 #include <cstdint>
+#include <chrono>
 
-enum SensorID{
-	SensorID_left_playpause_button,
-	SensorID_left_cue_button,	
-	SensorID_left_tempo_poten,
-	SensorID_left_loop_duration_rotaryenc,
-	SensorID_left_loop_in_button,
-	SensorID_left_loop_out_button,
+struct Sensor{
+	Sensor(const std::int16_t sensor_id, const std::uint16_t initial_value = 0) noexcept;
+	virtual void write(const std::int16_t value) noexcept;
+	virtual bool value_changed() noexcept;
+
+	const std::int16_t sensor_id;
+	std::int16_t value;
 	
-	SensorID_right_playpause_button,
-	SensorID_right_cue_button,	
-	SensorID_right_tempo_poten,
-	SensorID_right_loop_duration_rotaryenc,
-	SensorID_right_loop_in_button,
-	SensorID_right_loop_out_button
+	protected:
+	std::int16_t prev_value;
 };
 
-enum ButtonState{
+enum ButtonState : int16_t{
 	ButtonState_Untouched,
+
 	ButtonState_Pressed,
-  
 	ButtonState_Held,
-	ButtonState_Released,
+	ButtonState_Released
 };
 
-constexpr int potentiometer_centre_value = 512;
-constexpr float potentiometer_max_range_from_1x = 0.125;
-constexpr float potentiometer_value_for_max_range = (float)potentiometer_centre_value / potentiometer_max_range_from_1x;
+struct Button : public Sensor{
+	Button(const std::int16_t sensor_id) noexcept;
+	void write(const std::int16_t value) noexcept override;
+	
+	static constexpr std::uint32_t pressed_to_held_duration_ms = 125;
+	
+	private:
+	std::chrono::time_point<std::chrono::steady_clock> last_pressed;
+};
 
-constexpr int_fast64_t max_loop_duration_2_exponent = 5;
-constexpr int_fast64_t min_loop_duration_2_exponent = -5;		
+struct RotaryEncoder : public Sensor{
+	RotaryEncoder(const std::int16_t sensor_id) noexcept;
+	void write(const std::int16_t value) noexcept override;
+};
+
+inline constexpr std::int16_t potentiometer_centre_value = 480;
+inline constexpr float max_delta_ratio_from_1x = 0.125;
+inline constexpr float potentiometer_value_for_max_range = potentiometer_centre_value / max_delta_ratio_from_1x;
 
 #endif
