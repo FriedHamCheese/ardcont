@@ -168,6 +168,12 @@ void AudioTrackImpl::set_destination_speed_multiplier(const float dest_speed_mul
 	this->destination_speed_multiplier = dest_speed_multiplier;
 }
 
+float AudioTrackImpl::get_seconds_per_beat() const{
+	return  60.0 / this->bpm.load();
+}
+float AudioTrackImpl::get_frames_per_beat(const float seconds_per_beat) const{
+	return (float)ntrb_std_samplerate * seconds_per_beat;
+}
 
 bool AudioTrackImpl::set_loop(){
 	if(this->bpm.load() == 0.0) return true;
@@ -181,19 +187,26 @@ bool AudioTrackImpl::set_loop(){
 				<< "\n\t(" << this->loop_frame_begin << " stdaud frames).\n";
 	std::cout << ": " << std::flush;
 	
-	this->loop_frame_end = this->loop_frame_begin + (float)ntrb_std_samplerate * (60.0/(this->bpm.load())) * this->beats_per_loop.load();
+	const float frames_per_loop = get_frames_per_beat(get_seconds_per_beat()) * this->beats_per_loop.load();
+	this->loop_frame_end = this->loop_frame_begin + frames_per_loop;
 	this->loop_queued = true;
 	return true;
 }
 
-void AudioTrackImpl::set_beats_per_loop(const float beats_per_loop){
-	if(beats_per_loop != this->beats_per_loop.load()){
-		this->beats_per_loop = beats_per_loop;
-		std::cout << "Track " << std::uint16_t(this->track_id) << " beats per loop: " << beats_per_loop << '\n';
-		std::cout << ": " << std::flush;
-	}
-	if(this->loop_queued)
-		this->loop_frame_end = this->loop_frame_begin.load() + (float)ntrb_std_samplerate * (60.0/(this->bpm.load())) * this->beats_per_loop.load();
+float AudioTrackImpl::increment_loop_step(){
+	this->beats_per_loop = this->beats_per_loop.load() * 2;
+
+	const float frames_per_loop = get_frames_per_beat(get_seconds_per_beat()) * this->beats_per_loop.load();
+	this->loop_frame_end = this->loop_frame_begin + frames_per_loop;
+	return this->beats_per_loop.load();
+}
+
+float AudioTrackImpl::decrement_loop_step(){
+	this->beats_per_loop = this->beats_per_loop.load() / 2;
+	
+	const float frames_per_loop = get_frames_per_beat(get_seconds_per_beat()) * this->beats_per_loop.load();
+	this->loop_frame_end = this->loop_frame_begin + frames_per_loop;
+	return this->beats_per_loop.load();
 }
 
 void AudioTrackImpl::cancel_loop(){

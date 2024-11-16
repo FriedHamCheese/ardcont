@@ -76,6 +76,17 @@ class AudioTrack{
 	virtual void set_destination_speed_multiplier(const float dest_speed_multiplier) = 0;
 	
 	/**
+	Increases AudioTrack::beats_per_loop by 2x and adjust AudioTrack::loop_frame_end according to it.
+	Returns AudioTrack::beats_per_loop.
+	*/
+	virtual float increment_loop_step() = 0;
+	/**
+	Halves AudioTrack::beats_per_loop by 2 and adjust AudioTrack::loop_frame_end according to it.
+	Returns AudioTrack::beats_per_loop.
+	*/
+	virtual float decrement_loop_step() = 0;
+	
+	/**
 	Set the nearest cue point as the loop begin point and enters the loop with AudioTrack::beats_per_loop as the loop length. 
 	
 	This implies setting AudioTrack::loop_frame_begin, AudioTrack::loop_frame_end, 
@@ -83,8 +94,7 @@ class AudioTrack{
 	
 	Returns false if could not.
 	*/
-	virtual bool set_loop() = 0;	
-	virtual void set_beats_per_loop(const float beats_per_loop) = 0;
+	virtual bool set_loop() = 0;
 	virtual void cancel_loop() = 0;
 	
 	/**
@@ -252,6 +262,9 @@ class AudioTrackImpl : public AudioTrack{
 	void fine_step_backward();
 	void fine_step_forward();
 	void set_destination_speed_multiplier(const float dest_speed_multiplier);
+
+	float increment_loop_step();
+	float decrement_loop_step();
 	
 	bool set_loop();
 	void set_beats_per_loop(const float beats_per_loop);
@@ -267,6 +280,9 @@ class AudioTrackImpl : public AudioTrack{
 	std::optional<std::uint32_t> find_nearest_loop_cue_point();
 	std::optional<std::uint32_t> find_eariler_cue_point();
 	void adjust_speed_multiplier();
+	
+	float get_seconds_per_beat() const;
+	float get_frames_per_beat(const float seconds_per_beat) const;
 };
 
 #endif

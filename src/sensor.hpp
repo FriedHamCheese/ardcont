@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <chrono>
+#include <mutex>
 
 struct Sensor{
 	Sensor(const std::int16_t sensor_id, const std::uint16_t initial_value = 0) noexcept;
@@ -11,6 +12,8 @@ struct Sensor{
 
 	const std::int16_t sensor_id;
 	std::int16_t value;
+	
+	std::mutex access_mutex;
 	
 	protected:
 	std::int16_t prev_value;
@@ -27,6 +30,7 @@ enum ButtonState : int16_t{
 struct Button : public Sensor{
 	Button(const std::int16_t sensor_id) noexcept;
 	void write(const std::int16_t value) noexcept override;
+	bool value_changed() noexcept override;
 	
 	static constexpr std::uint32_t pressed_to_held_duration_ms = 125;
 	
