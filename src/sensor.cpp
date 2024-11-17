@@ -45,7 +45,6 @@ bool Button::value_changed() noexcept{
 		const std::uint32_t ms_since_last_press = (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - this->last_pressed)).count();
 		if(ms_since_last_press >= this->pressed_to_held_duration_ms){
 			this->value = ButtonState_Held;
-			std::cout << ms_since_last_press << std::endl;
 			return true;
 		}
 	}

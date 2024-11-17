@@ -15,6 +15,13 @@ A file containing the AudioTrack interface and its implementation AudioTrackImpl
 #include <optional>
 #include <iostream>
 
+enum AudioTrack_PlayMode{
+	AudioTrack_no_playback,
+	AudioTrack_regular_play,
+	AudioTrack_cue_play,
+	AudioTrack_slowdown_to_halt
+};
+
 /**
 An interface for a turntable deck. Use AudioTrackImpl for actual usage in production code.
 \todo 
@@ -58,6 +65,10 @@ class AudioTrack{
 	Returns false if errors occurred while toggling.
 	*/
 	virtual bool toggle_play_pause() = 0;
+	virtual AudioTrack_PlayMode get_play_mode() const = 0;
+	
+	virtual void initiate_cue_play() = 0;
+	virtual void stop_cue_play() = 0;
 	
 	///Get the mutex for accessing AudioTrack::samples.
 	std::mutex& get_sample_access_mutex(){
@@ -165,10 +176,8 @@ class AudioTrack{
 	///The number of frames to be in AudioTrack::samples which an AudioTrack must provide for the audio engine callback.
 	const std::uint32_t minimum_frames_in_buffer;
 
-	///To queue or not to queue loading from AudioTrack::stdaud_from_file.
-	///No garbage should be present in AudioTrack::samples in both conditions,
-	///for the latter, 0 fill it.
-	std::atomic<bool> in_pause_state = true;
+	std::atomic<AudioTrack_PlayMode> play_mode = AudioTrack_no_playback;
+	
 	/**
 	 * The stdaud frame which an AudioTrack is at. 
 	 * This has to be incremented by AudioTrack::speed_multiplier.
@@ -205,6 +214,8 @@ class AudioTrack{
 	static constexpr float speed_multiplier_recovering_frames = speed_multiplier_recovering_seconds * 48000.0;
 	///The speed multiplier change for a jog click.
 	static constexpr float fine_step_speed_multiplier_delta = 0.05;
+
+	std::atomic<std::uint32_t> cue_play_begin_frame = 0;
 
 	//Looping
 	std::atomic<std::uint32_t> loop_frame_begin = 0;
@@ -258,6 +269,10 @@ class AudioTrackImpl : public AudioTrack{
 	void display_deck_info();
 
 	bool toggle_play_pause();
+	AudioTrack_PlayMode get_play_mode() const noexcept override;
+
+	void initiate_cue_play() override;
+	void stop_cue_play() override;
 	
 	void fine_step_backward();
 	void fine_step_forward();

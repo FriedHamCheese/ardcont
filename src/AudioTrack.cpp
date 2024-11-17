@@ -33,9 +33,12 @@ void AudioTrackImpl::load_samples(){
 	std::lock_guard<std::mutex> stdaud_samples_access(this->sample_access_mutex);
 	this->samples.clear();
 
-	if((not this->initialised_stdaud_from_file) or this->in_pause_state.load() or this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_EOF){
+	const bool not_loading_audio = (not this->initialised_stdaud_from_file) 
+									or (this->play_mode.load() == AudioTrack_no_playback)
+									or (this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_EOF);
+	if(not_loading_audio){
 		this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
-		if(this->stdaud_from_file.load_err) this->in_pause_state = true;
+		if(this->stdaud_from_file.load_err) this->play_mode = AudioTrack_no_playback;
 		return;
 	}
 
@@ -58,7 +61,7 @@ void AudioTrackImpl::load_samples(){
 		std::cout << "Track " << (std::uint16_t)this->track_id << ": " << this->audfile_name << " finished."
 					<< "\n\tTrack now in pause." << std::endl;
 		std::cout << ": " << std::flush;
-		this->in_pause_state = true;
+		this->play_mode = AudioTrack_no_playback;
 	}
 }
 
@@ -133,7 +136,7 @@ void AudioTrackImpl::load_audio_info(const std::string& aud_filename){
 void AudioTrackImpl::display_deck_info(){
 	std::cout << "\nTrack " << (std::uint16_t)this->track_id
 				<< "\n\tAudio filename: " << this->audfile_name
-				<< "\n\tTrack paused: " <<  this->in_pause_state.load()
+				<< "\n\tTrack paused: " <<  (this->play_mode.load() == AudioTrack_no_playback)
 				<< "\n\tbpm: " << this->bpm.load()
 				<< "\n\tFirst beat at " << (float)this->first_beat_stdaud_frame / (float)ntrb_std_samplerate << " seconds." << std::endl;
 }
@@ -144,16 +147,39 @@ bool AudioTrackImpl::toggle_play_pause(){
 		if(stdaud_rwlock_acq_err) return false;
 	}
 	
-	if(this->in_pause_state && this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_EOF){
-		this->stdaud_from_file.stdaud_next_buffer_first_frame = 0;
+	const bool user_requests_replay = (this->play_mode.load() == AudioTrack_no_playback) 
+										and (this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_EOF);
+	if(user_requests_replay){
+		this->current_stdaud_frame = 0;
 		this->stdaud_from_file.load_err = ntrb_AudioBufferLoad_OK;
 	}
 	
 	if(this->initialised_stdaud_from_file)
 		pthread_rwlock_unlock(&(this->stdaud_from_file.buffer_access));
-
-	this->in_pause_state = !(this->in_pause_state.load());
+	
+	if (this->play_mode.load() != AudioTrack_regular_play)
+		this->play_mode = AudioTrack_regular_play;
+	else
+		this->play_mode = AudioTrack_no_playback;
 	return true;
+}
+
+AudioTrack_PlayMode AudioTrackImpl::get_play_mode() const noexcept{
+	return this->play_mode.load();
+}
+
+void AudioTrackImpl::initiate_cue_play(){
+	this->cue_play_begin_frame = this->find_eariler_cue_point().value();
+	this->current_stdaud_frame = this->cue_play_begin_frame.load();
+	this->play_mode = AudioTrack_cue_play;
+}
+
+void AudioTrackImpl::stop_cue_play(){
+	if(this->play_mode.load() != AudioTrack_cue_play)
+		return;
+	
+	this->play_mode = AudioTrack_no_playback;
+	this->current_stdaud_frame = this->cue_play_begin_frame.load();
 }
 
 void AudioTrackImpl::fine_step_backward(){
@@ -314,7 +340,8 @@ std::optional<std::uint32_t> AudioTrackImpl::find_nearest_loop_cue_point(){
 	const std::uint32_t frames_per_cue_step = (60.0 / this->bpm.load()) * float(ntrb_std_samplerate);
 
 	std::uint32_t later_nearest_beat_in_frames = this->first_beat_stdaud_frame.load();
-	while(later_nearest_beat_in_frames <= this->stdaud_from_file.stdaud_buffer_first_frame)
+	//keep adding the frame for the next beat until exceeding current frame
+	while(later_nearest_beat_in_frames <= this->current_stdaud_frame.load())
 		later_nearest_beat_in_frames += frames_per_cue_step;
 	
 	const std::uint32_t earlier_nearest_beat_in_frames = ntrb_clamp_i64((std::int32_t)later_nearest_beat_in_frames - (std::int32_t)frames_per_cue_step, this->first_beat_stdaud_frame, INT64_MAX);
@@ -336,8 +363,10 @@ std::optional<std::uint32_t> AudioTrackImpl::find_eariler_cue_point(){
 	
 	const std::uint32_t frames_per_cue_step = (60.0 / this->bpm.load()) * float(ntrb_std_samplerate);
 	std::uint32_t later_nearest_beat_in_frames = this->first_beat_stdaud_frame.load();
-	while(later_nearest_beat_in_frames <= this->stdaud_from_file.stdaud_buffer_first_frame)
-		later_nearest_beat_in_frames += frames_per_cue_step;	
+	
+	//keep adding the frame for the next beat until exceeding current frame
+	while(later_nearest_beat_in_frames <= this->current_stdaud_frame.load())
+		later_nearest_beat_in_frames += frames_per_cue_step;
 	
 	const std::uint32_t earlier_nearest_beat_in_frames = ntrb_clamp_i64((std::int32_t)later_nearest_beat_in_frames - (std::int32_t)frames_per_cue_step, this->first_beat_stdaud_frame, INT64_MAX);
 	

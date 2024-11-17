@@ -35,6 +35,9 @@ std::optional<std::int16_t> read_sensor(const std::vector<std::unique_ptr<Sensor
 }
 
 void translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, GlobalStates& global_states){
+	const std::unique_ptr<AudioTrack>& left_deck = global_states.audio_tracks[0];
+	const std::unique_ptr<AudioTrack>& right_deck = global_states.audio_tracks[1];	
+	
 	while(not global_states.requested_exit.load()){
 		for(auto& sensor : sensors){
 			std::lock_guard<std::mutex> current_sensor_access(sensor->access_mutex);
@@ -49,14 +52,25 @@ void translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Glo
 						}
 					}
 					break;
-				case SensorID_left_cue_button:
-					if(sensor->value == ButtonState_Released)
-						global_states.audio_tracks[0]->cue_to_nearest_cue_point();
+				case SensorID_left_cue_button:{
+					const AudioTrack_PlayMode play_mode = left_deck->get_play_mode();
+					const bool initiate_return_to_nearest_cue = (sensor->value == ButtonState_Released) 
+																and ((play_mode == AudioTrack_regular_play) or (play_mode == AudioTrack_slowdown_to_halt));
+					const bool initiate_cue_play = (sensor->value == ButtonState_Pressed) and (play_mode == AudioTrack_no_playback);
+					const bool stop_cue_play = (sensor->value == ButtonState_Released) and (play_mode == AudioTrack_cue_play);
+					
+					if(initiate_return_to_nearest_cue)
+						left_deck->cue_to_nearest_cue_point();
+					else if(initiate_cue_play)
+						left_deck->initiate_cue_play();
+					else if(stop_cue_play)
+						left_deck->stop_cue_play();
 					break;
+				}
 				case SensorID_left_tempo_poten:{
 					const float speed_multiplier = 1.0 + ((float)(sensor->value - potentiometer_centre_value) / potentiometer_value_for_max_range);
-					global_states.audio_tracks[0]->set_destination_speed_multiplier(speed_multiplier);
-					std::cout << "Track 0 bpm: " << speed_multiplier * global_states.audio_tracks[0]->get_bpm() << "x.\n";
+					left_deck->set_destination_speed_multiplier(speed_multiplier);
+					std::cout << "Track 0 bpm: " << speed_multiplier * left_deck->get_bpm() << "x.\n";
 					std::cout << ": " << std::flush;
 					break;
 				}	
@@ -66,34 +80,34 @@ void translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Glo
 					if(holding_loop_in_button){
 						float loop_step = 0;
 						if(sensor->value == 1)
-							loop_step = global_states.audio_tracks[0]->increment_loop_step();
+							loop_step = left_deck->increment_loop_step();
 						else if(sensor->value == -1)
-							loop_step = global_states.audio_tracks[0]->decrement_loop_step();
+							loop_step = left_deck->decrement_loop_step();
 						std::cout << "Track 0 beats per loop: " << loop_step << '\n';
 						std::cout << ": " << std::flush;
 					}else{
 						if(sensor->value == 1)
-							global_states.audio_tracks[0]->fine_step_forward();
+							left_deck->fine_step_forward();
 						else if(sensor->value == -1)
-							global_states.audio_tracks[0]->fine_step_backward();
+							left_deck->fine_step_backward();
 					}
 					break;
 				}
 				case SensorID_left_loop_in_button:
 					if(sensor->value == ButtonState_Released){
-						if(!global_states.audio_tracks[0]->set_loop()){
+						if(!left_deck->set_loop()){
 							std::cerr << "[Error]: serial_listener(): Unable to set loop cue due to rwlock acquisition error.\n";
 							std::cout << ": " << std::flush;
 						}
 					}
 					break;					
 				case SensorID_left_loop_out_button:
-					if(sensor->value == ButtonState_Released) global_states.audio_tracks[0]->cancel_loop();
+					if(sensor->value == ButtonState_Released) left_deck->cancel_loop();
 					break;
 					
 				case SensorID_right_playpause_button:
 					if(sensor->value == ButtonState_Released){
-						if(!global_states.audio_tracks[1]->toggle_play_pause()){
+						if(!right_deck->toggle_play_pause()){
 							std::cerr << "[Error]: serial_listener(): Unable to toggle play-pause due to rwlock acquisition error.\n";
 							std::cout << ": " << std::flush;
 						}
@@ -101,31 +115,31 @@ void translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Glo
 					break;
 				case SensorID_right_cue_button:
 					if(sensor->value == ButtonState_Released)
-						global_states.audio_tracks[1]->cue_to_nearest_cue_point();
+						right_deck->cue_to_nearest_cue_point();
 					break;
 				case SensorID_right_tempo_poten:{	
 					const float speed_multiplier = 1.0 + ((float)(sensor->value - potentiometer_centre_value) / potentiometer_value_for_max_range);
-					global_states.audio_tracks[1]->set_destination_speed_multiplier(speed_multiplier);
-					std::cout << "Track 1 bpm: " << speed_multiplier * global_states.audio_tracks[1]->get_bpm() << "x.\n";
+					right_deck->set_destination_speed_multiplier(speed_multiplier);
+					std::cout << "Track 1 bpm: " << speed_multiplier * right_deck->get_bpm() << "x.\n";
 					std::cout << ": " << std::flush;
 					break;
 				}
 				case SensorID_right_jogdial_rotaryenc:
 					if(sensor->value == 1)
-						global_states.audio_tracks[1]->fine_step_forward();
+						right_deck->fine_step_forward();
 					else if(sensor->value == -1)
-						global_states.audio_tracks[1]->fine_step_backward();	
+						right_deck->fine_step_backward();	
 					break;				
 				case SensorID_right_loop_in_button:
 					if(sensor->value == 3){
-						if(!global_states.audio_tracks[1]->set_loop()){
+						if(!right_deck->set_loop()){
 							std::cerr << "[Error]: serial_listener(): Unable to set loop cue due to rwlock acquisition error.\n";
 							std::cout << ": " << std::flush;
 						}
 					}
 					break;					
 				case SensorID_right_loop_out_button:
-					if(sensor->value == ButtonState_Released) global_states.audio_tracks[1]->cancel_loop();
+					if(sensor->value == ButtonState_Released) right_deck->cancel_loop();
 					break;
 			}
 		}
