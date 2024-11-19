@@ -17,7 +17,7 @@ bool Sensor::value_changed() noexcept{
 		this->prev_value = this->value;
 		return true;
 	}
-	return false;	
+	return false;
 }
 
 

@@ -25,7 +25,7 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 	for(const std::unique_ptr<AudioTrack>& track : global_states->audio_tracks){
 		const bool got_mutex = track->get_sample_access_mutex().try_lock();
 		if(!got_mutex){
-			std::cerr << "\n[Warn]: audeng_wrapper: stream_audio(): Unable to acquire the sample access mutex of track " << (std::uint16_t)track->get_track_id()  << ".\n";
+			std::cerr << "audeng_wrapper: stream_audio(): Unable to acquire the sample access mutex of track " << (std::uint16_t)track->get_track_id()  << ".\n";
 			std::cout << ": " << std::flush;
 			continue;
 		}

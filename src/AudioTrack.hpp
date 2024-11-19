@@ -15,10 +15,18 @@ A file containing the AudioTrack interface and its implementation AudioTrackImpl
 #include <optional>
 #include <iostream>
 
+///How the AudioTrack should manipulate its playback duration and speed.
+///This does not include looping.
 enum AudioTrack_PlayMode{
+	///No audio loading or playback, 0 filled AudioTrack::samples.
 	AudioTrack_no_playback,
+	///Keep playing until AudioTrack reaches EOF.
 	AudioTrack_regular_play,
+	///Keep playing until AudioTrack reaches EOF or the cue button is released from being held.
 	AudioTrack_cue_play,
+	///Play for only one beat.
+	AudioTrack_beat_preview,
+	///Keep playing while slowing down the playback speed to a halt.
 	AudioTrack_slowdown_to_halt
 };
 
@@ -65,10 +73,40 @@ class AudioTrack{
 	Returns false if errors occurred while toggling.
 	*/
 	virtual bool toggle_play_pause() = 0;
+	
 	virtual AudioTrack_PlayMode get_play_mode() const = 0;
 	
-	virtual void initiate_cue_play() = 0;
+	/**
+	Sets AudioTrack::current_stdaud_frame to the nearest earlier cue point 
+	and set AudioTrack::play_mode to AudioTrack_cue_play.
+	
+	This function should be called when the deck is in AudioTrack_no_playback.
+	
+	Returns false if could not find the nearest cue point due to rwlock error.
+	*/
+	virtual bool initiate_cue_play() = 0;
+	
+	/**
+	Returns AudioTrack::current_stdaud_frame back to the starting beat of AudioTrack::initiate_cue_play()
+	and brings AudioTrack::play_mode to AudioTrack_no_playback.
+	
+	This should be called when AudioTrack::play_mode is AudioTrack_cue_play.
+	*/	
 	virtual void stop_cue_play() = 0;
+	
+	/**
+	Sets AudioTrack::current_stdaud_frame to the beat after it and sets AudioTrack::play_mode to AudioTrack_beat_preview.
+	
+	Returns false if could not find the next beat due to rwlock error.
+	*/
+	virtual bool play_only_next_beat() = 0;
+	
+	/**
+	Sets AudioTrack::current_stdaud_frame to the beat before it and sets AudioTrack::play_mode to AudioTrack_beat_preview.
+	
+	Returns false if could not find the previous beat due to rwlock error.
+	*/
+	virtual bool play_only_prev_beat() = 0;
 	
 	///Get the mutex for accessing AudioTrack::samples.
 	std::mutex& get_sample_access_mutex(){
@@ -175,7 +213,7 @@ class AudioTrack{
 	std::vector<float> samples;
 	///The number of frames to be in AudioTrack::samples which an AudioTrack must provide for the audio engine callback.
 	const std::uint32_t minimum_frames_in_buffer;
-
+	
 	std::atomic<AudioTrack_PlayMode> play_mode = AudioTrack_no_playback;
 	
 	/**
@@ -213,9 +251,12 @@ class AudioTrack{
 	///AudioTrack::speed_multiplier_recovering_seconds but as stdaud frame count actual calculations in AudioTrack::adjust_speed_multiplier.
 	static constexpr float speed_multiplier_recovering_frames = speed_multiplier_recovering_seconds * 48000.0;
 	///The speed multiplier change for a jog click.
-	static constexpr float fine_step_speed_multiplier_delta = 0.05;
-
+	static constexpr float fine_step_speed_multiplier_delta = 0.025;
+	
+	///The frame which cue play started from, used for returning back after cue play has stopped.
 	std::atomic<std::uint32_t> cue_play_begin_frame = 0;
+	///The frame to end playback if the deck is previewing a beat.
+	std::atomic<std::uint32_t> end_beat_preview_at_frame = 0;
 
 	//Looping
 	std::atomic<std::uint32_t> loop_frame_begin = 0;
@@ -234,13 +275,6 @@ class AudioTrack{
 
 /**
 An implementation of AudioTrack to use for production code.
-
-Delays for each interaction:
-- Play/pause toggle - AudioTrack::minimum_frames_in_buffer, typically GlobalStates::msecs_per_callback.
-- Cue to nearest beat - instant.
-- Setting destination speed multiplier - instant.
-- Jogging - instant
-- Loop/unloop - AudioTrack::minimum_frames_in_buffer, typically GlobalStates::msecs_per_callback.
 */
 class AudioTrackImpl : public AudioTrack{
 	public:
@@ -266,16 +300,20 @@ class AudioTrackImpl : public AudioTrack{
 	*/
 	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback);
 	void load_audio_info(const std::string& aud_filename);
+	
 	void display_deck_info();
 
 	bool toggle_play_pause();
 	AudioTrack_PlayMode get_play_mode() const noexcept override;
 
-	void initiate_cue_play() override;
-	void stop_cue_play() override;
+	bool initiate_cue_play() override;
+	void stop_cue_play() noexcept override;
+
+	bool play_only_next_beat() override;
+	bool play_only_prev_beat() override;
 	
-	void fine_step_backward();
-	void fine_step_forward();
+	void fine_step_backward() noexcept override;
+	void fine_step_forward()  noexcept override;
 	void set_destination_speed_multiplier(const float dest_speed_multiplier);
 
 	float increment_loop_step();
@@ -291,6 +329,7 @@ class AudioTrackImpl : public AudioTrack{
 	bool load_single_frame();
 	bool fill_sample_buffer_while_in_loop(const std::uint32_t minimum_samples_in_sample_buffer);
 	bool fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer);
+	bool fill_sample_buffer_while_in_beat_preview(const std::uint32_t minimum_samples_in_sample_buffer);
 	
 	std::optional<std::uint32_t> find_nearest_loop_cue_point();
 	std::optional<std::uint32_t> find_eariler_cue_point();
@@ -298,6 +337,9 @@ class AudioTrackImpl : public AudioTrack{
 	
 	float get_seconds_per_beat() const;
 	float get_frames_per_beat(const float seconds_per_beat) const;
+	float get_frames_per_beat() const{
+		return get_frames_per_beat(get_seconds_per_beat());
+	}
 };
 
 #endif

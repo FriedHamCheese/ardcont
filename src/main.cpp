@@ -6,15 +6,12 @@
 #include "audeng_wrapper.hpp"
 
 #include "ntrb/alloc.h"
-#include "ntrb/utils.h"
 
 #include "serial/serial.h"
 
-#include <cmath>
 #include <vector>
 #include <string>
 #include <thread>
-#include <cstdint>
 #include <iostream>
 
 int main(){
@@ -34,15 +31,15 @@ int main(){
 		std::cout << std::flush;
 		
 		std::string selected_port_name;
-		std::cout << "Arduino port name | quit | refresh: " << std::flush;
+		std::cout << "Arduino port name | (q)uit |(r)efresh: " << std::flush;
 		keyboard_cin.getline(selected_port_name);
 		
-		if(selected_port_name == "quit"){		
+		if(selected_port_name == "q"){		
 			#ifdef NTRB_MEMDEBUG
 			ntrb_memdebug_uninit(true);
 			#endif
 			return 0;
-		}else if(selected_port_name == "refresh")
+		}else if(selected_port_name == "r")
 			continue;
 
 		try{
@@ -54,7 +51,7 @@ int main(){
 			else
 				break;
 		}catch(const std::exception& e){
-			std::cerr << "[Error]: Exception caught while trying to open a serial port."
+			std::cerr << "Exception caught while trying to open a serial port."
 						<< "\n\tstd::exception::what(): " << e.what() << "\n\n";
 		}
 	}

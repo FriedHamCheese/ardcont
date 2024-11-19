@@ -21,7 +21,7 @@ AudioTrack::AudioTrack(const std::uint32_t minimum_frames_in_buffer, const uint8
 	minimum_frames_in_buffer(minimum_frames_in_buffer),
 	track_id(track_id)
 {
-	
+
 }
 
 AudioTrack::~AudioTrack(){
@@ -47,14 +47,16 @@ void AudioTrackImpl::load_samples(){
 	
 	if(this->loop_queued.load())
 		sample_buffer_loaded = this->fill_sample_buffer_while_in_loop(minimum_samples_in_sample_buffer);
+	else if(this->play_mode.load() == AudioTrack_beat_preview)
+		sample_buffer_loaded = this->fill_sample_buffer_while_in_beat_preview(minimum_samples_in_sample_buffer);
 	else 
 		sample_buffer_loaded = this->fill_sample_buffer(minimum_samples_in_sample_buffer);
 	
 	if(not sample_buffer_loaded){
 		this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
-		std::cerr << "[Error]: AudioTrackImpl::load_samples(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
+		std::cerr << "AudioTrackImpl::load_samples(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
 			<< "\n\tSkipping audio loading callback...\n";
-		std::cout << ": " << std::flush;		
+		std::cout << ": " << std::flush;
 	}
 	
 	if(this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_EOF){
@@ -98,7 +100,7 @@ void AudioTrackImpl::load_audio_info(const std::string& aud_filename){
 	
 	std::ifstream metadata_file(aud_info_filename);
 	if(!metadata_file){
-		std::cerr << "[Warn]: metadata for audio file not found."
+		std::cerr << "AudioTrackImpl: load_audio_info(): metadata for audio file not found."
 					<< "\n\t bpm is set to 0.0, cueing and looping is unavaliable.\n";
 		return;
 	}
@@ -111,24 +113,37 @@ void AudioTrackImpl::load_audio_info(const std::string& aud_filename){
 				float seconds = 0.0;
 				const std::string::size_type minute_second_separator = value.find(':');
 				const std::string::size_type second_millisecond_separator = value.find('.');
+				
+				const bool has_minute_second_separator = minute_second_separator != std::string::npos;
+				const bool has_second_millisecond_separator = second_millisecond_separator != std::string::npos;
 
-				if(minute_second_separator != std::string::npos){
+				if(has_minute_second_separator){
 					const std::uint8_t minutes = std::stoi(value.substr(0, minute_second_separator));
 					seconds += (float)minutes * 60.0;
+					
+					if(has_second_millisecond_separator)
+						seconds += std::stoi(value.substr(minute_second_separator, second_millisecond_separator));
+					else
+						seconds += std::stoi(value.substr(minute_second_separator));					
+				}else{
+					if(has_second_millisecond_separator)
+						seconds += std::stoi(value.substr(0, second_millisecond_separator));
+					else
+						seconds += std::stoi(value);						
 				}
-				if(second_millisecond_separator != std::string::npos){
+				if(has_second_millisecond_separator){
 					const std::uint16_t milliseconds = std::stoi(value.substr(second_millisecond_separator+1));
 					seconds += (float)milliseconds / 1000.0;
 				}
-				
+
 				this->first_beat_stdaud_frame = seconds * ntrb_std_samplerate;
 			}
 		}
 		catch(const std::invalid_argument& stox_not_a_number){
-			std::cerr << "[Error]: AudioTrackImpl::set_file_to_load_from(): Data in " << keyword << " field is not a number.\n";
+			std::cerr << "AudioTrackImpl::set_file_to_load_from(): Data in " << keyword << " field is not a number.\n";
 		}
 		catch(const std::out_of_range& stox_out_of_range){
-			std::cerr << "[Error]: AudioTrackImpl::set_file_to_load_from(): Data in " << keyword << " field is either too small or too large.\n";
+			std::cerr << "AudioTrackImpl::set_file_to_load_from(): Data in " << keyword << " field is either too small or too large.\n";
 		}
 	}
 }
@@ -168,13 +183,17 @@ AudioTrack_PlayMode AudioTrackImpl::get_play_mode() const noexcept{
 	return this->play_mode.load();
 }
 
-void AudioTrackImpl::initiate_cue_play(){
-	this->cue_play_begin_frame = this->find_eariler_cue_point().value();
+bool AudioTrackImpl::initiate_cue_play(){
+	const std::optional<std::uint32_t> earlier_cue_point = this->find_eariler_cue_point();
+	if(not earlier_cue_point.has_value()) return false;
+	
+	this->cue_play_begin_frame = earlier_cue_point.value();
 	this->current_stdaud_frame = this->cue_play_begin_frame.load();
 	this->play_mode = AudioTrack_cue_play;
+	return true;
 }
 
-void AudioTrackImpl::stop_cue_play(){
+void AudioTrackImpl::stop_cue_play() noexcept{
 	if(this->play_mode.load() != AudioTrack_cue_play)
 		return;
 	
@@ -182,11 +201,46 @@ void AudioTrackImpl::stop_cue_play(){
 	this->current_stdaud_frame = this->cue_play_begin_frame.load();
 }
 
-void AudioTrackImpl::fine_step_backward(){
+bool AudioTrackImpl::play_only_next_beat(){
+	const AudioTrack_PlayMode current_play_mode = this->play_mode.load();
+	
+	if((current_play_mode == AudioTrack_no_playback) or (current_play_mode == AudioTrack_cue_play)){
+		const float frames_per_beat = this->get_frames_per_beat(this->get_seconds_per_beat());
+		
+		const std::optional<std::uint32_t> earlier_cue_point = this->find_eariler_cue_point();
+		if(not earlier_cue_point.has_value()) return false;
+		
+		const std::uint32_t next_beat_at_frame = earlier_cue_point.value() + (frames_per_beat*2);
+		this->current_stdaud_frame = next_beat_at_frame;
+		this->end_beat_preview_at_frame = next_beat_at_frame + frames_per_beat;
+		this->play_mode = AudioTrack_beat_preview;
+	}
+	
+	return true;
+}
+
+bool AudioTrackImpl::play_only_prev_beat(){
+	const AudioTrack_PlayMode current_play_mode = this->play_mode.load();
+	
+	if((current_play_mode == AudioTrack_no_playback) or (current_play_mode == AudioTrack_cue_play)){
+		const std::optional<std::uint32_t> earlier_cue_point = this->find_eariler_cue_point();
+		if(not earlier_cue_point.has_value()) return false;
+		
+		const std::uint32_t previous_beat_frame = earlier_cue_point.value();
+		const float frames_per_beat = this->get_frames_per_beat(this->get_seconds_per_beat());
+		
+		this->current_stdaud_frame = previous_beat_frame;
+		this->end_beat_preview_at_frame = previous_beat_frame + frames_per_beat;
+		this->play_mode = AudioTrack_beat_preview;
+	}
+	return true;
+}
+
+void AudioTrackImpl::fine_step_backward() noexcept{
 	this->speed_multiplier = this->speed_multiplier.load() - this->fine_step_speed_multiplier_delta;
 }
 
-void AudioTrackImpl::fine_step_forward(){
+void AudioTrackImpl::fine_step_forward() noexcept{
 	this->speed_multiplier = this->speed_multiplier.load() + this->fine_step_speed_multiplier_delta;
 }
 
@@ -326,6 +380,35 @@ bool AudioTrackImpl::fill_sample_buffer(const std::uint32_t minimum_samples_in_s
 		while(this->samples.size() < minimum_samples_in_sample_buffer){
 			const bool has_next_frame_in_file_aud_buffer = this->load_single_frame();
 			if(!has_next_frame_in_file_aud_buffer) break;
+		}
+		
+		this->stdaud_from_file.stdaud_next_buffer_first_frame = this->current_stdaud_frame.load();
+	}
+	return true;
+}
+
+bool AudioTrackImpl::fill_sample_buffer_while_in_beat_preview(const std::uint32_t minimum_samples_in_sample_buffer){
+	while(this->samples.size() < minimum_samples_in_sample_buffer){
+		this->stdaud_from_file.load_buffer_callback(&(this->stdaud_from_file));	
+		const ntrb_AudioBufferLoad_Error load_err = this->stdaud_from_file.load_err;
+		
+		if(load_err != ntrb_AudioBufferLoad_OK && load_err != ntrb_AudioBufferLoad_EOF)
+			return false;
+		if(load_err == ntrb_AudioBufferLoad_EOF) 
+			//ntrb will 0 fill its stdaud buffer if an eof has reached.
+			break;
+		
+		while(this->samples.size() < minimum_samples_in_sample_buffer){
+			const bool has_next_frame_in_file_aud_buffer = this->load_single_frame();
+			if(!has_next_frame_in_file_aud_buffer) break;
+			if(this->current_stdaud_frame >= this->end_beat_preview_at_frame){
+				const std::uint32_t remaining_frames_for_zero_fill = minimum_samples_in_sample_buffer - this->samples.size();
+				this->samples.insert(this->samples.end(), remaining_frames_for_zero_fill, 0.0);
+				
+				this->current_stdaud_frame = this->end_beat_preview_at_frame - this->get_frames_per_beat();
+				this->play_mode = AudioTrack_no_playback;
+				return true;
+			}
 		}
 		
 		this->stdaud_from_file.stdaud_next_buffer_first_frame = this->current_stdaud_frame.load();

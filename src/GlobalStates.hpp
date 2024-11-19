@@ -33,7 +33,7 @@ struct GlobalStates{
 		this->requested_exit = false;
 	}
 
-	static constexpr std::uint16_t msecs_per_callback = 50;
+	static constexpr std::uint16_t msecs_per_callback = 100;
 	std::vector<std::unique_ptr<AudioTrack>> audio_tracks;
 	
 	//A flag used by any thread to notify the other threads to prepare for exiting as soon as possible.
