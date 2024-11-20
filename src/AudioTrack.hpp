@@ -51,7 +51,11 @@ class AudioTrack{
 	///Frees AudioTrack::stdaud_from_file if AudioTrack::initialised_stdaud_from_file is true.
 	~AudioTrack();
 	
-	///Loads the final audio of the deck to be played in an audio engine callback to AudioTrack::samples.
+	/**
+	Loads the final audio of the deck to be played in an audio engine callback to AudioTrack::samples.
+	
+	This function is used as a detached thread, any errors are reported through standard streams.
+	*/
 	virtual void load_samples() = 0;
 	/**	
 	Sets the file which the deck will play (frees the previous audio file if needed).
@@ -109,11 +113,11 @@ class AudioTrack{
 	virtual bool play_only_prev_beat() = 0;
 	
 	///Get the mutex for accessing AudioTrack::samples.
-	std::mutex& get_sample_access_mutex(){
+	std::mutex& get_sample_access_mutex() noexcept{
 		return this->sample_access_mutex;
 	}
 	///Get a const reference to AudioTrack::samples.
-	const std::vector<float>& get_samples() const{
+	const std::vector<float>& get_samples() const noexcept{
 		return this->samples;
 	}
 	
@@ -141,7 +145,7 @@ class AudioTrack{
 	This implies setting AudioTrack::loop_frame_begin, AudioTrack::loop_frame_end, 
 	with the latter being AudioTrack::beats_per_loop after the former.
 	
-	Returns false if could not.
+	Returns false if could not find nearest cue point to start from or bpm data is unavailable.
 	*/
 	virtual bool set_loop() = 0;
 	virtual void cancel_loop() = 0;
@@ -153,10 +157,10 @@ class AudioTrack{
 	*/
 	virtual bool cue_to_nearest_cue_point() = 0;
 	
-	std::uint8_t get_track_id() const{
+	std::uint8_t get_track_id() const noexcept{
 		return this->track_id;		
 	}
-	float get_bpm() const{
+	float get_bpm() const noexcept{
 		return this->bpm.load();		
 	}
 	
@@ -167,6 +171,8 @@ class AudioTrack{
 	and call AudioTrack::adjust_speed_multiplier.
 	
 	If the frame to load is not within the boundary of the underlying AudioTrack::ntrb_AudioBuffer, the function returns false, notifying to the caller to load the ntrb_AudioBuffer and call this function again to append to AudioTrack::samples.
+	
+	This function assumes the caller has acquired at least a read lock of AudioTrack::stdaud_from_file.
 	*/
 	virtual bool load_single_frame() = 0;
 	/**
@@ -290,55 +296,51 @@ class AudioTrackImpl : public AudioTrack{
 	- the underlying pure stdaud read from ntrb_AudioBuffer failing to read its audio file, reported through std::cerr
 	- AudioTrack::stdaud_from_file reaching EOF, reported through std::cout
 	*/
-	void load_samples();
+	void load_samples() override;
 	
-	/**
-	Sets the file which the deck will play (frees the previous audio file if needed), loads the info of the audio file,
-	and displays the deck info.
+	///\todo cant have incorrect audio loaded
+	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback) noexcept override;
+	void load_audio_info(const std::string& aud_filename) override;
 	
-	Error from initialising an ntrb_AudioBuffer for the file is returned; but the ones related to loading the audio info is reported through std::cerr.
-	*/
-	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback);
-	void load_audio_info(const std::string& aud_filename);
-	
-	void display_deck_info();
+	void display_deck_info() override;
 
-	bool toggle_play_pause();
+	bool toggle_play_pause() noexcept override;
 	AudioTrack_PlayMode get_play_mode() const noexcept override;
 
-	bool initiate_cue_play() override;
+	bool initiate_cue_play() noexcept override;
 	void stop_cue_play() noexcept override;
 
-	bool play_only_next_beat() override;
-	bool play_only_prev_beat() override;
+	bool play_only_next_beat() noexcept override;
+	bool play_only_prev_beat() noexcept override;
 	
 	void fine_step_backward() noexcept override;
 	void fine_step_forward()  noexcept override;
-	void set_destination_speed_multiplier(const float dest_speed_multiplier);
+	void set_destination_speed_multiplier(const float dest_speed_multiplier) noexcept override;
 
-	float increment_loop_step();
-	float decrement_loop_step();
+	float increment_loop_step() noexcept override;
+	float decrement_loop_step() noexcept override;
 	
-	bool set_loop();
-	void set_beats_per_loop(const float beats_per_loop);
-	void cancel_loop();
+	bool set_loop() override;
+	void cancel_loop() override;
 	
-	bool cue_to_nearest_cue_point();
+	bool cue_to_nearest_cue_point() noexcept override;
 	
 	private:
-	bool load_single_frame();
+	bool load_single_frame() override;
+	///\todo imprecise
 	bool fill_sample_buffer_while_in_loop(const std::uint32_t minimum_samples_in_sample_buffer);
 	bool fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer);
 	bool fill_sample_buffer_while_in_beat_preview(const std::uint32_t minimum_samples_in_sample_buffer);
 	
-	std::optional<std::uint32_t> find_nearest_loop_cue_point();
-	std::optional<std::uint32_t> find_eariler_cue_point();
-	void adjust_speed_multiplier();
+	std::optional<std::uint32_t> find_nearest_loop_cue_point() noexcept;
+	std::optional<std::uint32_t> find_eariler_cue_point() noexcept;
+	void adjust_speed_multiplier() noexcept;
 	
-	float get_seconds_per_beat() const;
-	float get_frames_per_beat(const float seconds_per_beat) const;
-	float get_frames_per_beat() const{
-		return get_frames_per_beat(get_seconds_per_beat());
+	static float get_seconds_per_beat(const float bpm) noexcept{
+		return 60.0 / bpm;
+	}
+	static float get_frames_per_beat(const float bpm) noexcept{
+		return (float)ntrb_std_samplerate * get_seconds_per_beat(bpm);
 	}
 };
 
