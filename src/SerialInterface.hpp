@@ -7,78 +7,6 @@
 #include "GlobalStates.hpp"
 #include "serial/serial.h"
 
-///An abstract class for interacting with a serial port.
-class SerialInterface{
-	public:
-	///Set the serial port specified by its name in *port* to be used as the serial port for further input readings.
-	virtual void setPort(const std::string &port) = 0;
-	///Opens the set serial port. Call SerialInterface::setPort() first.
-	virtual void open() = 0;
-	///Returns true if the set and opened serial port is currently ready for use.
-	virtual bool isOpen() = 0;
-	///
-	virtual size_t readline(std::string& buffer) = 0;
-};
-
-/**
-The implementation to communicate with the arduino at 9600 baud through wjwwood's serial::Serial.
-*/
-class ArdcontSerial : public SerialInterface{
-	public:
-	ArdcontSerial() : _serial("", 9600){
-		
-	}
-	
-	/**
-	* **May** throw InvalidConfigurationException,
-	idk where its declaration is and when it would be thrown, blame wjwwood's serial D:
-	*/
-	void setPort(const std::string &port) override{
-		this->_serial.setPort(port);
-	}
-	/**
-	May throw:
-	- std::invalid_argument	
-	- serial::SerialExecption	
-	- serial::IOException
-	
-	no clue for when they would, but ok
-	*/
-	void open() override{
-		this->_serial.open();
-	}
-
-	bool isOpen() override{
-		return this->_serial.isOpen();
-	}
-
-	size_t readline(std::string& buffer) override{
-		return this->_serial.readline(buffer);
-	}
-	
-	protected:
-	serial::Serial _serial;
-};
-
-/*
-class SerialMock : public SerialInterface{
-	public:
-	SerialMock();
-	void setPort(const std::string&){
-		
-	}
-	void open(){
-		
-	}
-	bool isOpen(){
-		return true;
-	}
-	size_t readline(std::string&){
-		return 1;
-	}
-};
-*/
-
 /**
 Waits for and reads lines from *arduino_serial*, keep track of the states of the sensors on the Arduino,
 and dispatches actions according to the sensors.
@@ -93,7 +21,7 @@ Information, warning and errors are displayed through std::cout and std::cerr.
 
 This function should be called as a thread.
 */
-void serial_listener(SerialInterface& arduino_serial, GlobalStates& global_states);
+void serial_listener(serial::Serial& arduino_serial, GlobalStates& global_states);
 
 /**
 A subfunction of serial_listener(). 
