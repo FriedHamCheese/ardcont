@@ -7,10 +7,10 @@
 #include <string>
 #include <iostream>
 
-void l_command(const std::string& args_str, GlobalStates& global_states){
+void load_command(const std::string& args_str, GlobalStates& global_states){
 	const std::size_t first_arg_separator_index = args_str.find(' ');
 	if(first_arg_separator_index == std::string::npos){
-		std::cerr << "Not enough arguments for the load command."
+		std::cerr << "KeyboardInterface: load_command(): Not enough arguments for the load command."
 					<< "\n\tForm of the l command: l [track] [filename]\n";
 		return;
 	}
@@ -21,18 +21,36 @@ void l_command(const std::string& args_str, GlobalStates& global_states){
 		const std::unique_ptr<AudioTrack>& deck_ptr = global_states.audio_tracks.at(track_id);
 		const ntrb_AudioBufferNew_Error new_aud_err = deck_ptr->set_file_to_load_from(aud_filename.c_str(), global_states.get_frames_per_callback());
 		if(new_aud_err){
-			std::cerr << "keyboard_listener(): Error setting a new track."
+			std::cerr << "KeyboardInterface: load_command(): Error setting a new track."
 						<< "\n\t(ntrb_AudioBufferNew_Error " << new_aud_err << ").\n";
 		}else 
 			deck_ptr->load_audio_info(aud_filename);
 		deck_ptr->display_deck_info();
 	}
 	catch(const std::invalid_argument& stoi_fmt_err){
-		std::cerr << "[Error]: keyboard_listener(): track ID is not a number.\n";
+		std::cerr << "KeyboardInterface: load_command(): track ID is not a number.\n";
 	}
 	catch(const std::out_of_range& stoi_out_of_range){
-		std::cerr << "[Error]: keyboard_listener(): track ID too large, too small, or does not refer to an existing AudioTrack.\n";
-	}	
+		std::cerr << "KeyboardInterface: load_command(): track ID too large, too small, or does not refer to an existing AudioTrack.\n";
+	}
+}
+
+void play_toggle_command(const std::string& args_str, GlobalStates& global_states){
+	if(args_str.size() == 0){
+		std::cerr << "KeyboardInterface: play_toggle_command(): Deck index not specified." << std::endl;
+		return;
+	}
+	
+	try{
+		const int deck_index = std::stoi(args_str);
+		global_states.audio_tracks.at(deck_index)->toggle_play_pause();
+	}
+	catch(const std::invalid_argument& stoi_fmt_err){
+		std::cerr << "KeyboardInterface: play_toggle_command(): track ID is not a number.\n";
+	}
+	catch(const std::out_of_range& stoi_out_of_range){
+		std::cerr << "KeyboardInterface: play_toggle_command(): track ID too large, too small, or does not refer to an existing AudioTrack.\n";
+	}
 }
 
 void keyboard_listener(GlobalStates& global_states){
@@ -63,7 +81,9 @@ void keyboard_listener(GlobalStates& global_states){
 			global_states.requested_exit = true;
 			std::cout << "To quit the program, interact with any sensors on the Arduino..." << std::endl;
 		}else if(command_str == "l"){
-			l_command(args_str, global_states);
+			load_command(args_str, global_states);
+		}else if(command_str == "p"){
+			play_toggle_command(args_str, global_states);
 		}
 		else std::cerr << "Invalid command " << command_str << '\n';
 	}
