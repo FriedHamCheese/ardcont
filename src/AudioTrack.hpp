@@ -31,10 +31,8 @@ enum AudioTrack_PlayMode{
 };
 
 /**
-An interface for a turntable deck. Use AudioTrackImpl for actual usage in production code.
-\todo 
-- hard to test stuff should not be tested and be in implementation,
-  easy to test can be in interface.
+A representation of a turntable deck.
+\todo
 - float/double inconsistency
 */
 class AudioTrack{
@@ -55,30 +53,36 @@ class AudioTrack{
 	Loads the final audio of the deck to be played in an audio engine callback to AudioTrack::samples.
 	
 	This function is used as a detached thread, any errors are reported through standard streams.
+	
+	Errors and information are reported through standard streams such as:
+	- the underlying pure stdaud read from ntrb_AudioBuffer failing to read its audio file, reported through std::cerr
+	- AudioTrack::stdaud_from_file reaching EOF, reported through std::cout
 	*/
-	virtual void load_samples() = 0;
+	void load_samples();
 	/**	
 	Sets the file which the deck will play (frees the previous audio file if needed).
 	Error from initialising an ntrb_AudioBuffer for the file is returned.
+	
+	///\todo cant have incorrect audio loaded
 	*/
-	virtual ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback) = 0;
+	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback) noexcept;
 	/**
 	Loads audio info file from aud_filename, usually by reading from a file which has the extension of aud_filename replaced with .txt.
 	
 	Errors are displayed through std::cerr.
 	*/
-	virtual void load_audio_info(const std::string& aud_filename) = 0;
+	void load_audio_info(const std::string& aud_filename);
 	///Displays the details of the deck through std::cout.
-	virtual void display_deck_info() = 0;
+	void display_deck_info();
 	
 	/**
 	If play, pauses; if pause, plays :D
 	
 	Returns false if errors occurred while toggling.
 	*/
-	virtual bool toggle_play_pause() = 0;
+	bool toggle_play_pause() noexcept;
 	
-	virtual AudioTrack_PlayMode get_play_mode() const = 0;
+	AudioTrack_PlayMode get_play_mode() const noexcept;
 	
 	/**
 	Sets AudioTrack::current_stdaud_frame to the nearest earlier cue point 
@@ -88,7 +92,7 @@ class AudioTrack{
 	
 	Returns false if could not find the nearest cue point due to rwlock error.
 	*/
-	virtual bool initiate_cue_play() = 0;
+	bool initiate_cue_play() noexcept;
 	
 	/**
 	Returns AudioTrack::current_stdaud_frame back to the starting beat of AudioTrack::initiate_cue_play()
@@ -96,21 +100,21 @@ class AudioTrack{
 	
 	This should be called when AudioTrack::play_mode is AudioTrack_cue_play.
 	*/	
-	virtual void stop_cue_play() = 0;
+	void stop_cue_play() noexcept;
 	
 	/**
 	Sets AudioTrack::current_stdaud_frame to the beat after it and sets AudioTrack::play_mode to AudioTrack_beat_preview.
 	
 	Returns false if could not find the next beat due to rwlock error.
 	*/
-	virtual bool play_only_next_beat() = 0;
+	bool play_only_next_beat() noexcept;
 	
 	/**
 	Sets AudioTrack::current_stdaud_frame to the beat before it and sets AudioTrack::play_mode to AudioTrack_beat_preview.
 	
 	Returns false if could not find the previous beat due to rwlock error.
 	*/
-	virtual bool play_only_prev_beat() = 0;
+	bool play_only_prev_beat() noexcept;
 	
 	///Get the mutex for accessing AudioTrack::samples.
 	std::mutex& get_sample_access_mutex() noexcept{
@@ -122,22 +126,22 @@ class AudioTrack{
 	}
 	
 	///Jogs the deck to play at a slightly slower speed temporarily.
-	virtual void fine_step_backward() = 0;
+	void fine_step_backward() noexcept;
 	///Jogs the deck to play at a slightly faster speed temporarily.
-	virtual void fine_step_forward() = 0;
+	void fine_step_forward() noexcept;
 	///Set the destination playback speed.
-	virtual void set_destination_speed_multiplier(const float dest_speed_multiplier) = 0;
+	void set_destination_speed_multiplier(const float dest_speed_multiplier) noexcept;
 	
 	/**
 	Increases AudioTrack::beats_per_loop by 2x and adjust AudioTrack::loop_frame_end according to it.
 	Returns AudioTrack::beats_per_loop.
 	*/
-	virtual float increment_loop_step() = 0;
+	float increment_loop_step() noexcept;
 	/**
 	Halves AudioTrack::beats_per_loop by 2 and adjust AudioTrack::loop_frame_end according to it.
 	Returns AudioTrack::beats_per_loop.
 	*/
-	virtual float decrement_loop_step() = 0;
+	float decrement_loop_step() noexcept;
 	
 	/**
 	Set the nearest cue point as the loop begin point and enters the loop with AudioTrack::beats_per_loop as the loop length. 
@@ -147,15 +151,15 @@ class AudioTrack{
 	
 	Returns false if could not find nearest cue point to start from or bpm data is unavailable.
 	*/
-	virtual bool set_loop() = 0;
-	virtual void cancel_loop() = 0;
+	bool set_loop();
+	void cancel_loop();
 	
 	/**
 	Moves the next loading frame to the nearest earlier cue point. Returns false if couldn't find a nearby cue point.
 	
 	Makes more sense to move to earlier cue point because the user will press cue after hearing the beat of the cue.
 	*/
-	virtual bool cue_to_nearest_cue_point() = 0;
+	bool cue_to_nearest_cue_point() noexcept;
 	
 	std::uint8_t get_track_id() const noexcept{
 		return this->track_id;		
@@ -164,7 +168,7 @@ class AudioTrack{
 		return this->bpm.load();		
 	}
 	
-	protected:
+	private:
 	/**
 	Append a single frame (both left and right samples) to AudioTrack::samples while taking playback speed into account,
 	increment AudioTrack::current_stdaud_frame by AudioTrack::speed_multiplier 
@@ -174,7 +178,7 @@ class AudioTrack{
 	
 	This function assumes the caller has acquired at least a read lock of AudioTrack::stdaud_from_file.
 	*/
-	virtual bool load_single_frame() = 0;
+	bool load_single_frame();
 	/**
 	Fills AudioTrack::samples for looping, 
 	and guaranteeing no garbage is in AudioTrack::samples by 0 filling AudioTrack::samples
@@ -186,7 +190,7 @@ class AudioTrack{
 	\return false for any errors from loading AudioTrack::stdaud_from_file but not for ntrb_AudioBufferLoad_EOF.
 	\return true if no errors occurred or AudioTrack::stdaud_from_file returns ntrb_AudioBufferLoad_EOF.
 	*/
-	virtual bool fill_sample_buffer_while_in_loop(const std::uint32_t minimum_samples_in_sample_buffer) = 0;
+	bool fill_sample_buffer_while_in_loop(const std::uint32_t minimum_samples_in_sample_buffer);
 	
 	/**
 	Fills AudioTrack::samples for regular playback, 
@@ -196,22 +200,22 @@ class AudioTrack{
 	\return false for any errors from loading AudioTrack::stdaud_from_file but not for ntrb_AudioBufferLoad_EOF.
 	\return true if no errors occurred or AudioTrack::stdaud_from_file returns ntrb_AudioBufferLoad_EOF.	
 	*/
-	virtual bool fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer) = 0;
+	bool fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer);
 	
 	/**
 	Return a stdaud frame number representing the nearest beat (or cue point) to AudioTrack::current_stdaud_frame. 
 	Returns a std::nullopt if couldn't acquire a rdlock of AudioTrack::stdaud_from_file.
 	*/
-	virtual std::optional<std::uint32_t> find_nearest_loop_cue_point() = 0;
+	std::optional<std::uint32_t> find_nearest_loop_cue_point() noexcept;
 	
 	/**
 	Return a stdaud frame number representing the beat (or cue point) prior to AudioTrack::current_stdaud_frame.
 	Returns a std::nullopt if couldn't acquire a rdlock of AudioTrack::stdaud_from_file.
 	*/
-	virtual std::optional<std::uint32_t> find_eariler_cue_point() = 0;
+	std::optional<std::uint32_t> find_eariler_cue_point() noexcept;
 	
 	///Adjust AudioTrack::speed_multiplier to approach AudioTrack::destination_speed_multiplier in between frames.
-	virtual void adjust_speed_multiplier() = 0;
+	void adjust_speed_multiplier() noexcept;
 	
 	///Mutex for accessing AudioTrack::samples.
 	std::mutex sample_access_mutex;
@@ -227,7 +231,7 @@ class AudioTrack{
 	 * This has to be incremented by AudioTrack::speed_multiplier.
 	 * This can be used to set the start of AudioTrack::stdaud_from_file.
 	 * */
-	std::atomic<double> current_stdaud_frame = 0;
+	std::atomic<double> current_stdaud_frame;
 	
 	/**
 	 * The underlying object which contains a buffer of stdaud frames of an audio file to play from.  
@@ -260,81 +264,25 @@ class AudioTrack{
 	static constexpr float fine_step_speed_multiplier_delta = 0.025;
 	
 	///The frame which cue play started from, used for returning back after cue play has stopped.
-	std::atomic<std::uint32_t> cue_play_begin_frame = 0;
+	std::atomic<std::uint32_t> cue_play_begin_frame;
 	///The frame to end playback if the deck is previewing a beat.
-	std::atomic<std::uint32_t> end_beat_preview_at_frame = 0;
+	std::atomic<std::uint32_t> end_beat_preview_at_frame;
 
 	//Looping
-	std::atomic<std::uint32_t> loop_frame_begin = 0;
-	std::atomic<std::uint32_t> loop_frame_end = 0;
+	std::atomic<std::uint32_t> loop_frame_begin;
+	std::atomic<std::uint32_t> loop_frame_end;
 	std::atomic<float> beats_per_loop = 4;
 	std::atomic<bool> loop_queued = false;
 	///The stdaud frame at which the first beat is at.
 	///This is used in calculating loops and cue points.
-	std::atomic<std::uint32_t> first_beat_stdaud_frame = 0;
+	std::atomic<std::uint32_t> first_beat_stdaud_frame;
 
 	//Track data
 	std::string audfile_name = "Track not loaded.";
 	std::atomic<float> bpm = 0.0;		
 	std::uint8_t track_id;
-};
-
-/**
-An implementation of AudioTrack to use for production code.
-*/
-class AudioTrackImpl : public AudioTrack{
-	public:
-	AudioTrackImpl(const std::uint32_t minimum_frames_in_buffer, const uint8_t track_id)
-	: AudioTrack(minimum_frames_in_buffer, track_id)
-	{
-	}
 	
-	/**
-	Loads the final audio of the deck to be played in a an audio engine callback to AudioTrack::samples.
-	
-	Errors and information are reported through standard streams such as:
-	- the underlying pure stdaud read from ntrb_AudioBuffer failing to read its audio file, reported through std::cerr
-	- AudioTrack::stdaud_from_file reaching EOF, reported through std::cout
-	*/
-	void load_samples() override;
-	
-	///\todo cant have incorrect audio loaded
-	ntrb_AudioBufferNew_Error set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback) noexcept override;
-	void load_audio_info(const std::string& aud_filename) override;
-	
-	void display_deck_info() override;
-
-	bool toggle_play_pause() noexcept override;
-	AudioTrack_PlayMode get_play_mode() const noexcept override;
-
-	bool initiate_cue_play() noexcept override;
-	void stop_cue_play() noexcept override;
-
-	bool play_only_next_beat() noexcept override;
-	bool play_only_prev_beat() noexcept override;
-	
-	void fine_step_backward() noexcept override;
-	void fine_step_forward()  noexcept override;
-	void set_destination_speed_multiplier(const float dest_speed_multiplier) noexcept override;
-
-	float increment_loop_step() noexcept override;
-	float decrement_loop_step() noexcept override;
-	
-	bool set_loop() override;
-	void cancel_loop() override;
-	
-	bool cue_to_nearest_cue_point() noexcept override;
-	
-	private:
-	bool load_single_frame() override;
-	///\todo imprecise
-	bool fill_sample_buffer_while_in_loop(const std::uint32_t minimum_samples_in_sample_buffer);
-	bool fill_sample_buffer(const std::uint32_t minimum_samples_in_sample_buffer);
 	bool fill_sample_buffer_while_in_beat_preview(const std::uint32_t minimum_samples_in_sample_buffer);
-	
-	std::optional<std::uint32_t> find_nearest_loop_cue_point() noexcept;
-	std::optional<std::uint32_t> find_eariler_cue_point() noexcept;
-	void adjust_speed_multiplier() noexcept;
 	
 	static float get_seconds_per_beat(const float bpm) noexcept{
 		return 60.0 / bpm;
