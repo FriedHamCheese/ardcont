@@ -6,6 +6,8 @@ A file containing the AudioTrack interface and its implementation AudioTrackImpl
 #ifndef AudioTrack_hpp
 #define AudioTrack_hpp
 
+#include "EffectContainer.hpp"
+
 #include "ntrb/AudioBuffer.h"
 #include "ntrb/aud_std_fmt.h"
 
@@ -167,7 +169,11 @@ class AudioTrack{
 	float get_bpm() const noexcept{
 		return this->bpm.load();		
 	}
-	
+	enum EffectType effect_type;
+	EffectContainer& get_effect_container() noexcept{
+		return this->effect_container;
+	}
+		
 	private:
 	/**
 	Append a single frame (both left and right samples) to AudioTrack::samples while taking playback speed into account,
@@ -290,6 +296,8 @@ class AudioTrack{
 	static float get_frames_per_beat(const float bpm) noexcept{
 		return (float)ntrb_std_samplerate * get_seconds_per_beat(bpm);
 	}
+	
+	EffectContainer effect_container;
 };
 
 #endif

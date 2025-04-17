@@ -14,6 +14,15 @@
 #include <thread>
 #include <iostream>
 
+/*
+features:
+- monitor mode
+- slip mode
+- hot cues
+issues:
+- play/pause and effect having callback delay D:
+*/
+
 int main(){
 	#ifdef NTRB_MEMDEBUG
 	ntrb_memdebug_init_with_return_value();
@@ -25,6 +34,8 @@ int main(){
 	
 	while(user_is_choosing_serial){
 		const std::vector<serial::PortInfo> serial_ports = serial::list_ports();
+		std::cout << "Port name: " << "null" << "\n\tdesc: " << "keyboard only" << '\n';
+		
 		for(const auto& port : serial_ports)
 			std::cout << "Port name: " << port.port << "\n\tdesc: " << port.description << "\n\tID: " << port.hardware_id << '\n';
 		std::cout << std::flush;
