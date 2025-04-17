@@ -68,6 +68,7 @@ int main(){
 
 	GlobalStates global_states;
 	global_states.audio_tracks.emplace_back(std::make_unique<AudioTrack>(global_states.get_frames_per_callback(), 0));
+	global_states.audio_tracks.emplace_back(std::make_unique<AudioTrack>(global_states.get_frames_per_callback(), 1));
 	
 	if(use_serial){
 		std::thread serial_thread(serial_listener, std::ref(arduino_serial), std::ref(global_states));
