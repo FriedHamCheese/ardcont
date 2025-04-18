@@ -7,7 +7,9 @@
 
 enum EffectType : uint8_t{
 	EffectType_None,
-	EffectType_Echo
+	EffectType_Echo,
+	EffectType_LowerSamplerate,
+	EffectType_Bitcrush
 };
 
 class EffectContainer{
@@ -21,6 +23,9 @@ class EffectContainer{
 
 	private:
 	void apply_echo_effect(std::vector<float>& samples);
+	void apply_low_samplerate_effect(std::vector<float>& samples);
+	void apply_bitcrush(std::vector<float>& samples);
+	
 	
 	const std::size_t echo_buffer_datapoints = 2 * ntrb_std_samplerate * ntrb_std_audchannels;
 	std::unique_ptr<float[]> echo_buffer;
