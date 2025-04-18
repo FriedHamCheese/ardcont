@@ -12,53 +12,61 @@
 #include <iostream>
 
 void serial_listener(serial::Serial& arduino_serial, GlobalStates& global_states){
-	std::vector<std::unique_ptr<Sensor>> sensors;
-	sensors.reserve(12);
-	sensors.emplace_back(std::make_unique<Button>(SensorID_left_playpause_button));
-	sensors.emplace_back(std::make_unique<Button>(SensorID_left_cue_button));
-	sensors.emplace_back(std::make_unique<Sensor>(SensorID_left_tempo_poten));
-	sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_left_jogdial_rotaryenc));
-	sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_in_button));
-	sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_out_button));
-	
-	sensors.emplace_back(std::make_unique<Button>(SensorID_right_playpause_button));
-	sensors.emplace_back(std::make_unique<Button>(SensorID_right_cue_button));
-	sensors.emplace_back(std::make_unique<Sensor>(SensorID_right_tempo_poten));
-	sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_right_jogdial_rotaryenc));
-	sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_in_button));
-	sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_out_button));
-	
-	std::string buffer;
-	std::thread sensor_translating_thread(_translate_sensor_changes, std::ref(sensors), std::ref(global_states));
-	
-	while(not global_states.requested_exit.load()){	
-		arduino_serial.readline(buffer);
-		const size_t comma_index = buffer.find(',');
-		if(comma_index == std::string::npos){
-			std::cerr << "\nserial_listener(): No comma in \"" << buffer << "\". Line ignored.\n";
-			std::cout << ": " << std::flush;
-			buffer.clear();
-			continue;
-		}
+	try{
+		std::vector<std::unique_ptr<Sensor>> sensors;
+		sensors.reserve(12);
+		sensors.emplace_back(std::make_unique<Button>(SensorID_left_playpause_button));
+		sensors.emplace_back(std::make_unique<Button>(SensorID_left_cue_button));
+		sensors.emplace_back(std::make_unique<Sensor>(SensorID_left_tempo_poten));
+		sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_left_jogdial_rotaryenc));
+		sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_in_button));
+		sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_out_button));
 		
-		try{
-			const int sensor_id = std::stoi(buffer.substr(0, comma_index));
-			const int sensor_value = std::stoi(buffer.substr(comma_index+1));
-			_write_to_sensor(sensors, sensor_id, sensor_value);
+		sensors.emplace_back(std::make_unique<Button>(SensorID_right_playpause_button));
+		sensors.emplace_back(std::make_unique<Button>(SensorID_right_cue_button));
+		sensors.emplace_back(std::make_unique<Sensor>(SensorID_right_tempo_poten));
+		sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_right_jogdial_rotaryenc));
+		sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_in_button));
+		sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_out_button));
+		
+		std::string buffer;
+		std::thread sensor_translating_thread(_translate_sensor_changes, std::ref(sensors), std::ref(global_states));
+		
+		while(not global_states.requested_exit.load()){	
+			arduino_serial.readline(buffer);
+			const size_t comma_index = buffer.find(',');
+			if(comma_index == std::string::npos){
+				std::cerr << "\nserial_listener(): No comma in \"" << buffer << "\". Line ignored.\n";
+				std::cout << ": " << std::flush;
+				buffer.clear();
+				continue;
+			}
+			
+			try{
+				const int sensor_id = std::stoi(buffer.substr(0, comma_index));
+				const int sensor_value = std::stoi(buffer.substr(comma_index+1));
+				_write_to_sensor(sensors, sensor_id, sensor_value);
 
-		}catch(const std::invalid_argument& not_a_number){
-			std::cerr << "\nserial_listener(): recieved text instead of number.";
-			std::cerr << "\n\tRead text: " << buffer << std::flush;
-			std::cout << ": " << std::flush;
+			}catch(const std::invalid_argument& not_a_number){
+				std::cerr << "\nserial_listener(): recieved text instead of number.";
+				std::cerr << "\n\tRead text: " << buffer << std::flush;
+				std::cout << ": " << std::flush;
+			}
+			catch(const std::out_of_range& stoi_out_of_range){
+				std::cerr << "\nserial_listener(): Either the sensor ID or the value from the sensor is either too large or too small.\n";
+				std::cout << ": " << std::flush;
+			}
+			
+			buffer.clear();
 		}
-		catch(const std::out_of_range& stoi_out_of_range){
-			std::cerr << "\nserial_listener(): Either the sensor ID or the value from the sensor is either too large or too small.\n";
-			std::cout << ": " << std::flush;
-		}
-		
-		buffer.clear();
+		sensor_translating_thread.join();
 	}
-	sensor_translating_thread.join();
+	catch(const std::exception& excp){
+		std::cerr << "SerialInterface: serial_listener(): Uncaught exception: " << excp.what() << std::endl;
+	}
+	catch(...){
+		std::cerr << "SerialInterface: serial_listener(): Uncaught throw." << std::endl;				
+	}
 }
 
 

@@ -16,12 +16,13 @@
 #include <iostream>
 
 AudioTrack::AudioTrack(const std::uint32_t minimum_frames_in_buffer, const uint8_t track_id)
-:	sample_access_mutex(), 
+:	effect_type(EffectType_None),
+	sample_access_mutex(), 
 	samples(minimum_frames_in_buffer * ntrb_std_audchannels), 
 	minimum_frames_in_buffer(minimum_frames_in_buffer),
-	track_id(track_id)
+	track_id(track_id),
+	effect_container()
 {
-
 }
 
 AudioTrack::~AudioTrack(){
@@ -46,32 +47,33 @@ void AudioTrack::load_samples(){
 	if(not_loading_audio){
 		this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
 		if(this->stdaud_from_file.load_err) this->play_mode = AudioTrack_no_playback;
-		return;
+	}else{
+		const std::uint32_t minimum_samples_in_sample_buffer = this->minimum_frames_in_buffer * ntrb_std_audchannels;
+		bool sample_buffer_loaded = true;
+		
+		if(this->loop_queued.load())
+			sample_buffer_loaded = this->fill_sample_buffer_while_in_loop(minimum_samples_in_sample_buffer);
+		else if(this->play_mode.load() == AudioTrack_beat_preview)
+			sample_buffer_loaded = this->fill_sample_buffer_while_in_beat_preview(minimum_samples_in_sample_buffer);
+		else 
+			sample_buffer_loaded = this->fill_sample_buffer(minimum_samples_in_sample_buffer);
+		
+		if(not sample_buffer_loaded){
+			this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
+			std::cerr << "AudioTrack::load_samples(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
+				<< "\n\tSkipping audio loading callback...\n";
+			std::cout << ": " << std::flush;
+		}
+		
+		if(this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_EOF){
+			std::cout << "Track " << (std::uint16_t)this->track_id << ": " << this->audfile_name << " finished."
+						<< "\n\tTrack now in pause." << std::endl;
+			std::cout << ": " << std::flush;
+			this->play_mode = AudioTrack_no_playback;
+		}
 	}
 
-	const std::uint32_t minimum_samples_in_sample_buffer = this->minimum_frames_in_buffer * ntrb_std_audchannels;
-	bool sample_buffer_loaded = true;
-	
-	if(this->loop_queued.load())
-		sample_buffer_loaded = this->fill_sample_buffer_while_in_loop(minimum_samples_in_sample_buffer);
-	else if(this->play_mode.load() == AudioTrack_beat_preview)
-		sample_buffer_loaded = this->fill_sample_buffer_while_in_beat_preview(minimum_samples_in_sample_buffer);
-	else 
-		sample_buffer_loaded = this->fill_sample_buffer(minimum_samples_in_sample_buffer);
-	
-	if(not sample_buffer_loaded){
-		this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
-		std::cerr << "AudioTrack::load_samples(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
-			<< "\n\tSkipping audio loading callback...\n";
-		std::cout << ": " << std::flush;
-	}
-	
-	if(this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_EOF){
-		std::cout << "Track " << (std::uint16_t)this->track_id << ": " << this->audfile_name << " finished."
-					<< "\n\tTrack now in pause." << std::endl;
-		std::cout << ": " << std::flush;
-		this->play_mode = AudioTrack_no_playback;
-	}
+	this->effect_container.apply_effect(this->samples, this->effect_type);
 }
 
 
