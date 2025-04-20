@@ -173,7 +173,9 @@ class AudioTrack{
 	EffectContainer& get_effect_container() noexcept{
 		return this->effect_container;
 	}
-		
+	
+	std::atomic_bool output_to_monitor = false;
+
 	private:
 	/**
 	Append a single frame (both left and right samples) to AudioTrack::samples while taking playback speed into account,

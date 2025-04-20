@@ -3,7 +3,6 @@
 
 #include "AudioTrack.hpp"
 #include "GlobalStates.hpp"
-#include "audeng_wrapper.hpp"
 #include "OutputDevicesInterface.hpp"
 
 #include "ntrb/alloc.h"
@@ -59,7 +58,7 @@ std::pair<PaDeviceIndex, PaDeviceIndex> user_select_output_devices(){
 			std::cout << "Monitor output device ID: " << std::flush;
 			std::getline(std::cin, monitor_output_device_id_str);
 			const PaDeviceIndex monitor_output_device_id = std::stoi(monitor_output_device_id_str);
-					
+
 			const bool invalid_audience_output_device 
 				= std::find(valid_output_devices.begin(), valid_output_devices.end(), audience_output_device_id) == valid_output_devices.end();
 			const bool invalid_monitor_output_device 

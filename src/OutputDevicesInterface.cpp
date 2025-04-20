@@ -1,6 +1,6 @@
 #include "OutputDevicesInterface.hpp"
 #include "OutputDeviceData.hpp"
-#include "audeng_wrapper.hpp"
+#include "output_device.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -19,13 +19,13 @@ OutputDevicesInterface::OutputDevicesInterface(
 		agreed_latency = monitor_output_latency;
 	
 	const OutputDeviceData monitor_data(global_states, monitor_output_device_index, agreed_latency, true);
-	this->monitor_output_device_thread = std::thread(run_audio_engine, monitor_data);
+	this->monitor_output_device_thread = std::thread(run_output_device, monitor_data);
 	this->monitor_output_device_thread.detach();
 
 	const bool has_one_output_device = audience_output_device_index == monitor_output_device_index;
 	if(not has_one_output_device){
 		const OutputDeviceData audience_data(global_states, audience_output_device_index, agreed_latency, false);
-		this->audience_output_device_thread = std::thread(run_audio_engine, audience_data);
+		this->audience_output_device_thread = std::thread(run_output_device, audience_data);
 		this->audience_output_device_thread.detach();
 	}
 }

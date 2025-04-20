@@ -1,4 +1,4 @@
-#include "audeng_wrapper.hpp"
+#include "output_device.hpp"
 #include "OutputDeviceData.hpp"
 
 #include "ntrb/audeng_wrapper.h"
@@ -45,6 +45,8 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 			status->store(AudioTrackAccess_BeingRead);
 		
 		for(const std::unique_ptr<AudioTrack>& track : global_states.audio_tracks){
+			if(device_data->is_monitor_device and (not track->output_to_monitor.load()))
+				continue;
 			const std::vector<float>& track_samples = track->get_samples();
 			for(size_t i = 0; i < stdaud_sample_count; i++)
 				mixed_output[i] += track_samples[i];
@@ -66,7 +68,7 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 	return paContinue;
 }
 
-void run_audio_engine(OutputDeviceData device_data) noexcept{
+void run_output_device(OutputDeviceData device_data) noexcept{
 	PaError pa_error = paNoError;
 	PaError pa_uninit_error = paNoError;
 	try{
