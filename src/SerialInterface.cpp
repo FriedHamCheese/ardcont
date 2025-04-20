@@ -11,7 +11,7 @@
 #include <thread>
 #include <iostream>
 
-void serial_listener(serial::Serial& arduino_serial, GlobalStates& global_states){
+void serial_listener(serial::Serial& arduino_serial, GlobalStates& global_states) noexcept{
 	try{
 		std::vector<std::unique_ptr<Sensor>> sensors;
 		sensors.reserve(12);

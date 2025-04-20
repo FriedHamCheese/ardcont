@@ -21,7 +21,7 @@ Information, warning and errors are displayed through std::cout and std::cerr.
 
 This function should be called as a thread.
 */
-void serial_listener(serial::Serial& arduino_serial, GlobalStates& global_states);
+void serial_listener(serial::Serial& arduino_serial, GlobalStates& global_states) noexcept;
 
 /**
 A subfunction of serial_listener(). 

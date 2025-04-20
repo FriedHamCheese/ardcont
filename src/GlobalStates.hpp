@@ -14,23 +14,21 @@
 #include <atomic>
 #include <cstdint>
 
+enum AudioTrackAccess_Status : std::uint8_t{
+	AudioTrackAccess_ReadingBlocked,
+	AudioTrackAccess_ReadyForReading,
+	AudioTrackAccess_BeingRead,
+	AudioTrackAccess_FinishedReading,
+};
+
 /**
 A struct containing states and constants shared between different threads of this program,
 passed by reference to the threads.
 */
+
 struct GlobalStates{
-	///Calls GlobalStates::reset_to_initial_state().
 	GlobalStates(){
-		this->reset_to_initial_state();
-	}
-	
-	/**
-	Clears GlobalStates::audio_tracks and sets GlobalStates::requested_exit to false.
-	This is provided for testing purposes or for consturcting a GlobalStates instance.
-	*/
-	void reset_to_initial_state(){
-		this->audio_tracks.clear();
-		this->requested_exit = false;
+		this->requested_exit = false;	
 	}
 
 	static constexpr std::uint16_t msecs_per_callback = 100;
@@ -44,6 +42,9 @@ struct GlobalStates{
 	std::uint32_t get_frames_per_callback() const{
 		return this->frames_per_callback;
 	}
+
+	std::atomic_uint8_t audience_output_device_status = AudioTrackAccess_FinishedReading;
+	std::atomic_uint8_t monitor_output_device_status = AudioTrackAccess_FinishedReading;
 	
 	private:
 	std::uint32_t frames_per_callback = (ntrb_std_samplerate * msecs_per_callback) / 1000;

@@ -4,15 +4,18 @@
 #include "AudioTrack.hpp"
 #include "GlobalStates.hpp"
 #include "audeng_wrapper.hpp"
+#include "OutputDevicesInterface.hpp"
 
 #include "ntrb/alloc.h"
 
 #include "serial/serial.h"
+#include "portaudio.h"
 
 #include <vector>
 #include <string>
 #include <thread>
 #include <iostream>
+#include <algorithm>
 
 /*
 features:
@@ -22,6 +25,67 @@ features:
 issues:
 - play/pause and effect having callback delay D:
 */
+
+std::pair<PaDeviceIndex, PaDeviceIndex> user_select_output_devices(){
+	const PaHostApiIndex host_api_index = Pa_GetDefaultHostApi();
+	
+	std::cout << "\nAvailable output devices\n";
+	
+	const PaDeviceIndex device_count = Pa_GetDeviceCount();
+	std::cout << "ID" << "\tDevice name\n" ;
+	
+	std::vector<PaDeviceIndex> valid_output_devices;
+	
+	for(PaDeviceIndex i = 0; i < device_count; i++){
+		const PaDeviceInfo* const device_info = Pa_GetDeviceInfo(i);
+		const bool is_output_device = device_info->maxOutputChannels > 0;
+		if(is_output_device and device_info->hostApi == host_api_index){
+			std::cout << i << '\t' << device_info->name << '\n';
+			valid_output_devices.push_back(i);
+		}
+	}
+	std::cout << std::flush;
+	
+	bool valid_device_id = false;
+	while(not valid_device_id){
+		try{
+			std::string audience_output_device_id_str;
+			std::string monitor_output_device_id_str;
+			
+			std::cout << "Audience output device ID: " << std::flush;
+			std::getline(std::cin, audience_output_device_id_str);
+			const PaDeviceIndex audience_output_device_id = std::stoi(audience_output_device_id_str);
+
+			std::cout << "Monitor output device ID: " << std::flush;
+			std::getline(std::cin, monitor_output_device_id_str);
+			const PaDeviceIndex monitor_output_device_id = std::stoi(monitor_output_device_id_str);
+					
+			const bool invalid_audience_output_device 
+				= std::find(valid_output_devices.begin(), valid_output_devices.end(), audience_output_device_id) == valid_output_devices.end();
+			const bool invalid_monitor_output_device 
+				= std::find(valid_output_devices.begin(), valid_output_devices.end(), monitor_output_device_id) == valid_output_devices.end();
+			
+			if(invalid_audience_output_device){
+				std::cerr << "Invalid device ID for audience output device.\n";
+				continue;
+			}
+			if(invalid_monitor_output_device){
+				std::cerr << "Invalid device ID for monitor output device.\n";
+				continue;
+			}
+			std::cout << "Device IDs verified." << std::endl;
+			return std::make_pair(audience_output_device_id, monitor_output_device_id);
+		}
+		catch(const std::invalid_argument& stoi_fmt_err){
+			std::cerr << "Device ID is not a number.\n";
+		}
+		catch(const std::out_of_range& stoi_out_of_range){
+			std::cerr << "Device ID overflowed.\n";
+		}
+	}
+	std::cin.ignore();
+	return std::make_pair(-255, -255);
+}
 
 int main(){
 	#ifdef NTRB_MEMDEBUG
@@ -76,23 +140,38 @@ int main(){
 	}else{
 		std::cout << "Using keyboard only mode." << std::endl;
 	}
+	
+	const PaError portaudio_init_error = Pa_Initialize();
+	if(portaudio_init_error != paNoError){
+		std::cerr << "main(): failed to initialise PortAudio: PaError: " << portaudio_init_error << '\n';;
+		return 0;
+	}
 
 	GlobalStates global_states;
 	global_states.audio_tracks.emplace_back(std::make_unique<AudioTrack>(global_states.get_frames_per_callback(), 0));
 	global_states.audio_tracks.emplace_back(std::make_unique<AudioTrack>(global_states.get_frames_per_callback(), 1));
+	
+	const auto [audience_output_device_id, monitor_output_device_id] = user_select_output_devices();
+	OutputDevicesInterface devices_interface(audience_output_device_id, monitor_output_device_id, global_states);
 	
 	if(use_serial){
 		std::thread serial_thread(serial_listener, std::ref(arduino_serial), std::ref(global_states));
 		serial_thread.join();
 	}
 	std::thread keyboard_thread(keyboard_listener, std::ref(global_states));
-	std::thread audeng_thread(run_audio_engine, std::ref(global_states));
-
+	std::thread output_devices_interface_thread(devices_interface.run, &devices_interface);
+	
 	keyboard_thread.join();
-	audeng_thread.join();
+	output_devices_interface_thread.join();
 	
 	global_states.audio_tracks[0].reset(nullptr);
 	global_states.audio_tracks[1].reset(nullptr);
+	
+	const PaError portaudio_terminate_error = Pa_Terminate();
+	if(portaudio_terminate_error != paNoError){
+		std::cerr << "main(): failed to terminate PortAudio instance: PaError: " << portaudio_terminate_error << '\n';;
+		return 0;
+	}
 	
 	#ifdef NTRB_MEMDEBUG
 	ntrb_memdebug_uninit(true);

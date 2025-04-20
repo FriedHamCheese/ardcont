@@ -1,8 +1,8 @@
 #ifndef audeng_wrapper_hpp
 #define audeng_wrapper_hpp
 
-#include "GlobalStates.hpp"
+#include "OutputDeviceData.hpp"
 
-void run_audio_engine(GlobalStates& global_states);
+void run_audio_engine(OutputDeviceData device_data) noexcept;
 
 #endif

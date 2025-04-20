@@ -116,7 +116,7 @@ void effect_command(const std::string& args_str, GlobalStates& global_states){
 	}
 }
 
-void keyboard_listener(GlobalStates& global_states){
+void keyboard_listener(GlobalStates& global_states) noexcept{
 	try{
 		//Wait for arduino 2 second wait before its outputs are sent.
 		std::this_thread::sleep_for(std::chrono::seconds(3));

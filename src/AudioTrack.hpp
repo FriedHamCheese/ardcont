@@ -60,7 +60,7 @@ class AudioTrack{
 	- the underlying pure stdaud read from ntrb_AudioBuffer failing to read its audio file, reported through std::cerr
 	- AudioTrack::stdaud_from_file reaching EOF, reported through std::cout
 	*/
-	void load_samples();
+	void load_samples() noexcept;
 	/**	
 	Sets the file which the deck will play (frees the previous audio file if needed).
 	Error from initialising an ntrb_AudioBuffer for the file is returned.

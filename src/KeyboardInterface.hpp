@@ -12,6 +12,6 @@ A function to interpret lines from keyboard inputs and dispatch actions accordin
 
 This should be used as a thread.
 */
-void keyboard_listener(GlobalStates& global_states);
+void keyboard_listener(GlobalStates& global_states) noexcept;
 
 #endif
