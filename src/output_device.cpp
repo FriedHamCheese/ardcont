@@ -1,5 +1,6 @@
 #include "output_device.hpp"
 #include "OutputDeviceData.hpp"
+#include "ui.hpp"
 
 #include "ntrb/audeng_wrapper.h"
 #include "ntrb/aud_std_fmt.h"
@@ -16,12 +17,12 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 						const PaStreamCallbackTimeInfo*, PaStreamCallbackFlags, 
 						void* OutputDeviceData_ptr) noexcept
 {
+	OutputDeviceData* const device_data = (OutputDeviceData*)OutputDeviceData_ptr;
 	try{
 		float* mixed_output = (float*)output_void;
 		const unsigned long stdaud_sample_count = frameCount * ntrb_std_audchannels;
 		std::memset(mixed_output, 0, stdaud_sample_count * sizeof(float));
 
-		OutputDeviceData* const device_data = (OutputDeviceData*)OutputDeviceData_ptr;
 		GlobalStates& global_states = device_data->global_states;
 		
 		std::atomic_uint8_t* status;
@@ -56,21 +57,16 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 		return paContinue;
 	}
 	catch(const std::exception& excp){
-		std::cerr << "audeng_wrapper: stream_audio(): Uncaught exception: " << excp.what() << '\n';
-		std::cerr << "Audio chunk missed.\n";
-		std::cout << ": " << std::endl;
+		ui::print_to_infobar(std::string("output device callback: ") + excp.what(), UIColorPair_Error);
 	}
 	catch(...){
-		std::cerr << "audeng_wrapper: stream_audio(): Uncaught throw." << std::endl;
-		std::cerr << "Audio chunk missed.\n";
-		std::cout << ": " << std::endl;
+		ui::print_to_infobar(std::string("output device callback: uncaught throw"), UIColorPair_Error);
 	}
 	return paContinue;
 }
 
 void run_output_device(OutputDeviceData device_data) noexcept{
 	PaError pa_error = paNoError;
-	PaError pa_uninit_error = paNoError;
 	try{
 		//output_stream Alloc
 		PaStream* output_stream;
@@ -83,33 +79,21 @@ void run_output_device(OutputDeviceData device_data) noexcept{
 		if(pa_error) goto close_stream;
 
 		while(device_data.global_states.requested_exit.load() == false){
-			Pa_Sleep(GlobalStates::msecs_per_callback);
+			std::this_thread::sleep_for(std::chrono::milliseconds(device_data.global_states.msecs_per_callback) / 10);
 		}
-
 		Pa_StopStream(output_stream);
-		//it's a lot more messier to error handle the cleanup procedures. So we only check at Pa_Terminate().
 		
 		close_stream:
 		Pa_CloseStream(output_stream);
 		
 		print_err:
-		if(pa_error != paNoError){
-			fprintf(stderr, "PaError %i caught.\n", pa_error);
-			fprintf(stderr,  "(%s)\n", Pa_GetErrorText(pa_error));
-		}
-		if(pa_uninit_error != paNoError){
-			fprintf(stderr, "Error %i caught while uninitializing audio system.\n", pa_uninit_error);
-			fprintf(stderr,  "(%s)\n", Pa_GetErrorText(pa_uninit_error));
-		}
+		if(pa_error != paNoError)
+			ui::print_to_infobar(std::string("output device thread: PaError ") + std::to_string(pa_error), UIColorPair_Error);
 	}
 	catch(const std::exception& excp){
-		std::cerr << "audeng_wrapper: run_audio_engine(): Uncaught exception: " << excp.what() << '\n';
-		std::cerr << "Output device stopped.\n";
-		std::cout << ": " << std::endl;
+		ui::print_to_infobar(std::string("output device thread: ") + excp.what(), UIColorPair_Error);
 	}
 	catch(...){
-		std::cerr << "audeng_wrapper: run_audio_engine(): Uncaught throw." << std::endl;
-		std::cerr << "Output device stopped.\n";
-		std::cout << ": " << std::endl;
+		ui::print_to_infobar(std::string("output device thread: uncaught throw"), UIColorPair_Error);
 	}
 }

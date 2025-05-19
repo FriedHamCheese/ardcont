@@ -1,4 +1,5 @@
 #include "AudioTrack.hpp"
+#include "ui.hpp"
 #include "GlobalStates.hpp"
 
 #include "ntrb/aud_std_fmt.h"
@@ -55,35 +56,31 @@ void AudioTrack::load_samples() noexcept{
 			
 			if(not sample_buffer_loaded){
 				this->samples.insert(this->samples.end(), this->minimum_frames_in_buffer * ntrb_std_audchannels, 0.0);
-				std::cerr << "AudioTrack::load_samples(): Error loading " << this->audfile_name << "(ntrb_AudioBufferLoad_Error: " << this->stdaud_from_file.load_err << ")."
-					<< "\n\tSkipping audio loading callback...\n";
-				std::cout << ": " << std::flush;
+				const std::string msg = std::string("Error loading samples to deck") + std::to_string(this->track_id) + std::string("(ntrb_AudioBufferLoad_Error ") + std::to_string(this->stdaud_from_file.load_err) + std::string(").");
+				ui::print_to_infobar(msg, UIColorPair_Error);
 			}
 			
 			if(this->stdaud_from_file.load_err == ntrb_AudioBufferLoad_EOF){
-				std::cout << "Track " << (std::uint16_t)this->track_id << ": " << this->audfile_name << " finished."
-							<< "\n\tTrack now in pause." << std::endl;
-				std::cout << ": " << std::flush;
+				const std::string msg = std::string("Track ") + std::to_string(this->track_id) + "finished.";
+				ui::print_to_infobar(msg, UIColorPair_Info);
 				this->play_mode = AudioTrack_no_playback;
 			}
 		}
 		this->effect_container.apply_effect(this->samples, this->effect_type);		
 	}
 	catch(const std::system_error& e){
-		std::cerr << "AudioTrack::load_samples(): error acquiring the access mutex for AudioTrack::samples of track " << (std::uint16_t)(this->track_id) << ".\n";
-		std::cout << ": " << std::flush;
+		const std::string msg = std::string("AudioTrack::load_samples(): ") + std::to_string(this->track_id) + std::string(" mutex error.");
+		ui::print_to_infobar(msg, UIColorPair_Error);
 		return;
 	}
 	catch(const std::exception& e){
-		std::cerr << "AudioTrack::load_samples(): Uncaught exception: " << e.what() << ".\n";
-		std::cerr << "Audio chunk missed.\n";
-		std::cout << ": " << std::flush;
+		const std::string msg = std::string("AudioTrack::load_samples(): ") + std::to_string(this->track_id) + e.what();
+		ui::print_to_infobar(msg, UIColorPair_Error);
 		return;
 	}
 	catch(...){
-		std::cerr << "AudioTrack::load_samples(): Uncaught throw.\n";
-		std::cerr << "Audio chunk missed.\n";
-		std::cout << ": " << std::flush;
+		const std::string msg = std::string("AudioTrack::load_samples(): ") + std::to_string(this->track_id) + std::string(" uncaught throw.");
+		ui::print_to_infobar(msg, UIColorPair_Error);
 		return;
 	}
 }
@@ -91,7 +88,6 @@ void AudioTrack::load_samples() noexcept{
 
 ntrb_AudioBufferNew_Error AudioTrack::set_file_to_load_from(const char* const filename, const std::uint32_t frames_per_callback) noexcept{
 	try{
-		std::clog << "set_file_to_load_from\n";
 		std::lock_guard<std::mutex> _(this->sample_access_mutex);
 		
 		if(this->initialised_stdaud_from_file)
@@ -127,8 +123,7 @@ void AudioTrack::load_audio_info(const std::string& aud_filename){
 	
 	std::ifstream metadata_file(aud_info_filename);
 	if(!metadata_file){
-		std::cerr << "AudioTrack::load_audio_info(): metadata for audio file not found."
-					<< "\n\t bpm is set to 0.0, cueing and looping is unavaliable.\n";
+		ui::print_to_infobar("Audio info file not found. Functionalities limited.", UIColorPair_Warning);
 		return;
 	}
 	
@@ -167,20 +162,14 @@ void AudioTrack::load_audio_info(const std::string& aud_filename){
 			}
 		}
 		catch(const std::invalid_argument& stox_not_a_number){
-			std::cerr << "AudioTrack::load_audio_info(): Data in " << keyword << " field is not a number.\n";
+			const std::string msg = "Audio info file: data for " + keyword + " is not a number.";
+			ui::print_to_infobar(msg, UIColorPair_Warning);
 		}
 		catch(const std::out_of_range& stox_out_of_range){
-			std::cerr << "AudioTrack::load_audio_info(): Data in " << keyword << " field is either too small or too large.\n";
+			const std::string msg = "Audio info file: data for " + keyword + " not in range.";
+			ui::print_to_infobar(msg, UIColorPair_Warning);
 		}
 	}
-}
-
-void AudioTrack::display_deck_info(){
-	std::cout << "\nTrack " << (std::uint16_t)this->track_id
-				<< "\n\tAudio filename: " << this->audfile_name
-				<< "\n\tTrack paused: " <<  (this->play_mode.load() == AudioTrack_no_playback)
-				<< "\n\tbpm: " << this->bpm.load()
-				<< "\n\tFirst beat at " << (float)this->first_beat_stdaud_frame / (float)ntrb_std_samplerate << " seconds." << std::endl;
 }
 
 bool AudioTrack::toggle_play_pause() noexcept{
@@ -218,8 +207,6 @@ bool AudioTrack::initiate_cue_play() noexcept{
 	this->cue_play_begin_frame = current_beat;
 	this->current_stdaud_frame = current_beat;
 	this->play_mode = AudioTrack_cue_play;
-	
-	std::cout << ((float)earlier_cue_point.value())/48000.0 << '\n';
 	return true;
 }
 
@@ -286,9 +273,6 @@ bool AudioTrack::set_loop(){
 		return false;
 	
 	this->loop_frame_begin = nearest_loop_cue_point.value();
-	std::cout << "Track " << (std::uint16_t)this->track_id << ": Nearest beat at: " << (float)this->loop_frame_begin / ntrb_std_samplerate << " seconds" 
-				<< "\n\t(" << this->loop_frame_begin << " stdaud frames).\n";
-	std::cout << ": " << std::flush;
 	
 	const float frames_per_loop = get_frames_per_beat(this->bpm.load()) * this->beats_per_loop.load();
 	this->loop_frame_end = this->loop_frame_begin + frames_per_loop;
@@ -313,11 +297,7 @@ float AudioTrack::decrement_loop_step() noexcept{
 }
 
 void AudioTrack::cancel_loop(){
-	if(this->loop_queued.load()){
-		this->loop_queued = false;
-		std::cout << "Track " << (std::uint16_t)this->track_id << " loop cancelled.\n";
-		std::cout << ": " << std::flush;
-	}
+	if(this->loop_queued.load()) this->loop_queued = false;
 }
 
 bool AudioTrack::cue_to_nearest_cue_point() noexcept{

@@ -1,6 +1,6 @@
 #include "SerialInterface.hpp"
-#include "KeyboardInterface.hpp"
 
+#include "ui.hpp"
 #include "AudioTrack.hpp"
 #include "GlobalStates.hpp"
 #include "OutputDevicesInterface.hpp"
@@ -10,6 +10,8 @@
 #include "serial/serial.h"
 #include "portaudio.h"
 
+#include <ncursesw/ncurses.h>
+
 #include <vector>
 #include <string>
 #include <thread>
@@ -18,7 +20,6 @@
 
 /*
 features:
-- monitor mode
 - slip mode
 - hot cues
 issues:
@@ -79,7 +80,7 @@ std::pair<PaDeviceIndex, PaDeviceIndex> user_select_output_devices(){
 			std::cerr << "Device ID is not a number.\n";
 		}
 		catch(const std::out_of_range& stoi_out_of_range){
-			std::cerr << "Device ID overflowed.\n";
+			std::cerr << "Device ID out of range.\n";
 		}
 	}
 	std::cin.ignore();
@@ -153,15 +154,50 @@ int main(){
 	const auto [audience_output_device_id, monitor_output_device_id] = user_select_output_devices();
 	OutputDevicesInterface devices_interface(audience_output_device_id, monitor_output_device_id, global_states);
 	
+	WINDOW* main_window = initscr();
+	if(not main_window){
+		std::cerr << "main(): initscr() failed.\n\tExitting...\n";
+		return 0;
+	}
+	box(main_window, 0, 0);
+
+	if(cbreak() == ERR or noecho() == ERR)
+		ui::print_to_infobar("main: cbreak() or noecho() error.", UIColorPair_Error);
+	timeout(0);
+	
+	ui::has_colors = has_colors();
+	if(ui::has_colors){
+		if(start_color() != ERR){
+			init_pair((int)UIColorPair_Error, COLOR_RED, COLOR_WHITE);
+			init_pair((int)UIColorPair_Warning, COLOR_YELLOW, COLOR_WHITE);
+			init_pair((int)UIColorPair_Info, COLOR_BLUE, COLOR_WHITE);
+		}else{
+			ui::has_colors = false;
+			ui::print_to_infobar("main: start_color() failure. No colors D:", UIColorPair_Default);
+		}
+	}
+	else ui::print_to_infobar("No color support D:", UIColorPair_Default);
+	
+	///\todo: add minimum window size check
+	const std::uint16_t main_window_width = ui::get_window_width(main_window);
+	ui::draw_center_text(main_window, "Ardcont", 0);
+	refresh();
+
+	const std::uint16_t deck_info_window_width = (main_window_width/2) - 1;
+	ui::left_deck_info_window = newwin(ui::deck_info_height, deck_info_window_width, 1, 1);
+	ui::right_deck_info_window = newwin(ui::deck_info_height, deck_info_window_width, 1, 1 + deck_info_window_width);
+	ui::keyboard_input_window = newwin(ui::input_window_height, main_window_width-2, 1 + ui::deck_info_height, 1);
+	ui::stdout_window = newwin(ui::stdout_window_height, main_window_width-2, 1 + ui::deck_info_height + ui::input_window_height, 1);
+	
 	if(use_serial){
 		std::thread serial_thread(serial_listener, std::ref(arduino_serial), std::ref(global_states));
 		serial_thread.join();
 	}
-	std::thread keyboard_thread(keyboard_listener, std::ref(global_states));
 	std::thread output_devices_interface_thread(devices_interface.run, &devices_interface);
+	std::thread ui_renderer_thread(ui::render_ui, std::ref(global_states));
 	
-	keyboard_thread.join();
 	output_devices_interface_thread.join();
+	ui_renderer_thread.join();
 	
 	global_states.audio_tracks[0].reset(nullptr);
 	global_states.audio_tracks[1].reset(nullptr);
@@ -175,6 +211,12 @@ int main(){
 	#ifdef NTRB_MEMDEBUG
 	ntrb_memdebug_uninit(true);
 	#endif
+	
+	delwin(ui::left_deck_info_window);
+	delwin(ui::right_deck_info_window);	
+	delwin(ui::keyboard_input_window);
+	delwin(ui::stdout_window);
+	endwin();
 	
 	return 0;
 }

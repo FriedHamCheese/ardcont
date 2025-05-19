@@ -1,6 +1,7 @@
 #include "OutputDevicesInterface.hpp"
 #include "OutputDeviceData.hpp"
 #include "output_device.hpp"
+#include "ui.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -73,26 +74,20 @@ void OutputDevicesInterface::run() noexcept{
 						global_states.monitor_output_device_status = AudioTrackAccess_ReadingBlocked;
 					}
 					catch(const std::system_error& thread_spawn_failed){
-						std::cerr << "OutputDevicesInterface: run(): Failed to spawn a thread for loading samples.\n" << thread_spawn_failed.what() << '\n';
-						std::cout << ": " << std::flush;
+						ui::print_to_infobar("Failed to spawn thread for loading samples.", UIColorPair_Error);
 					}
 					break;
 				}
 				default:
-				std::cerr << "OutputDevicesInterface: run(): Invalid monitor device status.\n";
-				std::cout << ": " << std::flush;
+				ui::print_to_infobar("Invalid monitor device status.", UIColorPair_Error);
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 		catch(const std::exception& excp){
-			std::cerr << "OutputDevicesInterface: run(): Uncaught exception: " << excp.what() << '\n';
-			std::cerr << "Continuing...\n";
-			std::cout << ": " << std::flush;
+			ui::print_to_infobar(std::string("OutputDevicesInterface::run(): ") + excp.what(), UIColorPair_Error);
 		}
 		catch(...){
-			std::cerr << "OutputDevicesInterface: run(): Uncaught throw.\n";
-			std::cerr << "Continuing...\n";
-			std::cout << ": " << std::flush;
+			ui::print_to_infobar("OutputDevicesInterface::run(): uncaught throw.", UIColorPair_Error);
 		}
 	}
 }

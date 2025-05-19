@@ -239,8 +239,9 @@ class AudioTrack{
 	 * This has to be incremented by AudioTrack::speed_multiplier.
 	 * This can be used to set the start of AudioTrack::stdaud_from_file.
 	 * */
+	public:
 	std::atomic<double> current_stdaud_frame;
-	
+	private:
 	/**
 	 * The underlying object which contains a buffer of stdaud frames of an audio file to play from.  
 	 */
@@ -258,10 +259,11 @@ class AudioTrack{
 
 	 This value differs from AudioTrack::destination_speed_multiplier which can only be changed by the tempo knob and changes instantly; while speed_multiplier needs time to catch up with the former to simulate turntable rotational speed acceleration/deceleration. It can be changed from the tempo knob or jogging, and should be changed for every frame applied to AudioTrack::samples to simulate smooth turntable rotational acceleration. 
 	 */
+	public:
 	std::atomic<double> speed_multiplier = 1.0;
 	///The playback speed ratio to theoretically play at.
 	std::atomic<double> destination_speed_multiplier = 1.0;
-	
+	private:
 	/**
 	 * The amount of time for AudioTrack::speed_multiplier to reach AudioTrack::destination_speed_multiplier, regardless of the difference between the two.
 	 */
@@ -277,19 +279,23 @@ class AudioTrack{
 	std::atomic<std::uint32_t> end_beat_preview_at_frame;
 
 	//Looping
+	public:
 	std::atomic<std::uint32_t> loop_frame_begin;
 	std::atomic<std::uint32_t> loop_frame_end;
 	std::atomic<float> beats_per_loop = 4;
 	std::atomic<bool> loop_queued = false;
+	private:
 	///The stdaud frame at which the first beat is at.
 	///This is used in calculating loops and cue points.
 	std::atomic<std::uint32_t> first_beat_stdaud_frame;
 
 	//Track data
+	public:
 	std::string audfile_name = "Track not loaded.";
 	std::atomic<float> bpm = 0.0;		
 	std::uint8_t track_id;
 	
+	private:
 	bool fill_sample_buffer_while_in_beat_preview(const std::uint32_t minimum_samples_in_sample_buffer);
 	
 	static float get_seconds_per_beat(const float bpm) noexcept{

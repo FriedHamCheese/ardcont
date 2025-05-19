@@ -10,31 +10,14 @@ include $(NTRB_DIR)/makeconfig.make
 
 include makeconfig.make
 
-AUTOMATED_TEST := NO
-ifeq ($(AUTOMATED_TEST),YES)
-	AUTOMATED_TEST_MACRO := -DARDCONT_AUTOMATED_TEST
-else
-	AUTOMATED_TEST_MACRO :=
-endif
-
-CXXFLAGS := -Wall -Wextra -g3 $(NTRB_DEPENDENCY_INCLUDES) -I$(NTRB_DIR)/include $(SERIAL_INCLUDE) $(NTRB_COMPILING_SYMBOLS) $(AUTOMATED_TEST_MACRO)
-LDLIBS := $(NTRB_LINKING_DEPENDENCIES) $(SERIAL_LINKING_FLAGS)
+CXXFLAGS := -Wall -Wextra -g3 $(NTRB_DEPENDENCY_INCLUDES) -I$(NTRB_DIR)/include $(SERIAL_INCLUDE) $(NTRB_COMPILING_SYMBOLS) $(AUTOMATED_TEST_MACRO) -DNCURSES_STATIC
+LDLIBS := $(NTRB_LINKING_DEPENDENCIES) $(SERIAL_LINKING_FLAGS) -lncurses
 
 build.exe: $(NTRB_OBJFILES) $(OBJ_FILES)
 	$(CXX) -o $@ $^ $(LDLIBS)
 
 $(OBJ_FILES): ./bin/%.o: ./src/%.cpp $(HEADER_FILES) | ./bin
 	$(CXX) $< -c $(CXXFLAGS) -o $@
-
-OBJ_FILES_NO_MAIN := $(filter-out ./bin/main.o,$(OBJ_FILES))
-TESTING_HEADER_FILES := $(wildcard ./tests/*.hpp)
-
-./test.exe: $(NTRB_OBJFILES) $(OBJ_FILES_NO_MAIN) ./tests/test_main.o
-	$(CXX) -o $@ $^ $(GOOGLE_TEST_OBJ) $(LDLIBS)
-
-./tests/test_main.o: ./tests/test_main.cpp $(HEADER_FILES) $(TESTING_HEADER_FILES)
-	$(CXX) $< -c $(CXXFLAGS) $(GOOGLE_TEST_INCLUDE) -o $@	
-
 
 ./bin:
 	mkdir $@

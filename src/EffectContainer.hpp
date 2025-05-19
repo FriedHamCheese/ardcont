@@ -2,6 +2,7 @@
 #define EffectContainer_hpp
 
 #include "ntrb/aud_std_fmt.h"
+#include <array>
 #include <vector>
 #include <memory>
 
@@ -10,6 +11,13 @@ enum EffectType : uint8_t{
 	EffectType_Echo,
 	EffectType_LowerSamplerate,
 	EffectType_Bitcrush
+};
+
+constexpr std::array<const char*, (int)EffectType_Bitcrush+1> effect_names{
+	"None", 
+	"Echo", 
+	"Bitcrush",
+	"Noisy",
 };
 
 class EffectContainer{

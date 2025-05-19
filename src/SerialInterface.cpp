@@ -1,6 +1,7 @@
 #include "SerialInterface.hpp"
 #include "GlobalStates.hpp"
 #include "sensor.hpp"
+#include "ui.hpp"
 
 #include "../ardcont/SensorID.hpp"
 
@@ -12,60 +13,60 @@
 #include <iostream>
 
 void serial_listener(serial::Serial& arduino_serial, GlobalStates& global_states) noexcept{
-	try{
-		std::vector<std::unique_ptr<Sensor>> sensors;
-		sensors.reserve(12);
-		sensors.emplace_back(std::make_unique<Button>(SensorID_left_playpause_button));
-		sensors.emplace_back(std::make_unique<Button>(SensorID_left_cue_button));
-		sensors.emplace_back(std::make_unique<Sensor>(SensorID_left_tempo_poten));
-		sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_left_jogdial_rotaryenc));
-		sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_in_button));
-		sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_out_button));
-		
-		sensors.emplace_back(std::make_unique<Button>(SensorID_right_playpause_button));
-		sensors.emplace_back(std::make_unique<Button>(SensorID_right_cue_button));
-		sensors.emplace_back(std::make_unique<Sensor>(SensorID_right_tempo_poten));
-		sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_right_jogdial_rotaryenc));
-		sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_in_button));
-		sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_out_button));
-		
-		std::string buffer;
-		std::thread sensor_translating_thread(_translate_sensor_changes, std::ref(sensors), std::ref(global_states));
-		
-		while(not global_states.requested_exit.load()){	
-			arduino_serial.readline(buffer);
-			const size_t comma_index = buffer.find(',');
-			if(comma_index == std::string::npos){
-				std::cerr << "\nserial_listener(): No comma in \"" << buffer << "\". Line ignored.\n";
-				std::cout << ": " << std::flush;
-				buffer.clear();
-				continue;
-			}
+	while(not global_states.requested_exit.load()){
+		try{
+			std::vector<std::unique_ptr<Sensor>> sensors;
+			sensors.reserve(12);
+			sensors.emplace_back(std::make_unique<Button>(SensorID_left_playpause_button));
+			sensors.emplace_back(std::make_unique<Button>(SensorID_left_cue_button));
+			sensors.emplace_back(std::make_unique<Sensor>(SensorID_left_tempo_poten));
+			sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_left_jogdial_rotaryenc));
+			sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_in_button));
+			sensors.emplace_back(std::make_unique<Button>(SensorID_left_loop_out_button));
 			
-			try{
-				const int sensor_id = std::stoi(buffer.substr(0, comma_index));
-				const int sensor_value = std::stoi(buffer.substr(comma_index+1));
-				_write_to_sensor(sensors, sensor_id, sensor_value);
+			sensors.emplace_back(std::make_unique<Button>(SensorID_right_playpause_button));
+			sensors.emplace_back(std::make_unique<Button>(SensorID_right_cue_button));
+			sensors.emplace_back(std::make_unique<Sensor>(SensorID_right_tempo_poten));
+			sensors.emplace_back(std::make_unique<RotaryEncoder>(SensorID_right_jogdial_rotaryenc));
+			sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_in_button));
+			sensors.emplace_back(std::make_unique<Button>(SensorID_right_loop_out_button));
+			
+			std::string buffer;
+			std::thread sensor_translating_thread(_translate_sensor_changes, std::ref(sensors), std::ref(global_states));
+			
+			while(not global_states.requested_exit.load()){	
+				arduino_serial.readline(buffer);
+				const size_t comma_index = buffer.find(',');
+				if(comma_index == std::string::npos){
+					buffer.clear();
+					continue;
+				}
+				
+				try{
+					const int sensor_id = std::stoi(buffer.substr(0, comma_index));
+					const int sensor_value = std::stoi(buffer.substr(comma_index+1));
+					_write_to_sensor(sensors, sensor_id, sensor_value);
 
-			}catch(const std::invalid_argument& not_a_number){
-				std::cerr << "\nserial_listener(): recieved text instead of number.";
-				std::cerr << "\n\tRead text: " << buffer << std::flush;
-				std::cout << ": " << std::flush;
+				}catch(const std::invalid_argument& not_a_number){
+					const std::string msg = std::string("Serial: ") + buffer + std::string(" are not numbers.");
+					ui::print_to_infobar(msg, UIColorPair_Warning);
+				}
+				catch(const std::out_of_range& stoi_out_of_range){
+					const std::string msg = std::string("Serial: ") + buffer + std::string(" value is out of range.");
+					ui::print_to_infobar(msg, UIColorPair_Warning);
+				}
+				
+				buffer.clear();
 			}
-			catch(const std::out_of_range& stoi_out_of_range){
-				std::cerr << "\nserial_listener(): Either the sensor ID or the value from the sensor is either too large or too small.\n";
-				std::cout << ": " << std::flush;
-			}
-			
-			buffer.clear();
+			sensor_translating_thread.join();
 		}
-		sensor_translating_thread.join();
-	}
-	catch(const std::exception& excp){
-		std::cerr << "SerialInterface: serial_listener(): Uncaught exception: " << excp.what() << std::endl;
-	}
-	catch(...){
-		std::cerr << "SerialInterface: serial_listener(): Uncaught throw." << std::endl;				
+		catch(const std::exception& excp){
+			const std::string msg = std::string("SerialInterface: serial_listener(): ") + excp.what();
+			ui::print_to_infobar(msg, UIColorPair_Error);
+		}
+		catch(...){
+			ui::print_to_infobar("SerialInterface: serial_listener(): Uncaught throw.", UIColorPair_Error);		
+		}
 	}
 }
 
@@ -105,10 +106,8 @@ void _translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Gl
 			switch(sensor->sensor_id){
 				case SensorID_left_playpause_button:
 					if(sensor->value == ButtonState_Released){
-						if(!global_states.audio_tracks[0]->toggle_play_pause()){
-							std::cerr << "SerialInterface: _translate_sensor_changes(): Unable to toggle play-pause due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;
-						}
+						if(!global_states.audio_tracks[0]->toggle_play_pause())
+							ui::print_to_infobar("SerialInterface: _translate_sensor_changes(): mutex error.", UIColorPair_Error);
 					}
 					break;
 				case SensorID_left_cue_button:{
@@ -129,25 +128,20 @@ void _translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Gl
 				case SensorID_left_tempo_poten:{
 					const float speed_multiplier = 1.0 + ((float)(sensor->value - potentiometer_centre_value) / potentiometer_value_for_max_range);
 					left_deck->set_destination_speed_multiplier(speed_multiplier);
-					std::cout << "Track 0 bpm: " << speed_multiplier * left_deck->get_bpm() << "x.\n";
-					std::cout << ": " << std::flush;
 					break;
 				}	
 				case SensorID_left_jogdial_rotaryenc:{
 					const std::optional<std::int16_t> sensor_value_opt = _read_sensor(sensors, SensorID_left_loop_in_button);
 					if(not sensor_value_opt.has_value()){
-						std::cerr << "SerialInterface: _translate_sensor_changes(): no sensor with ID " << SensorID_left_loop_in_button << '\n';
-						std::cout << ": " << std::flush;
+						const std::string msg = std::string("Serial: No sensor with ID ") + std::to_string(SensorID_left_loop_in_button);
+						ui::print_to_infobar(msg, UIColorPair_Error);
 					}
 					const bool holding_loop_in_button = sensor_value_opt.value() == ButtonState_Held;
 					if(holding_loop_in_button){
-						float loop_step = 0;
 						if(sensor->value == 1)
-							loop_step = left_deck->increment_loop_step();
+							left_deck->increment_loop_step();
 						else if(sensor->value == -1)
-							loop_step = left_deck->decrement_loop_step();
-						std::cout << "Track 0 beats per loop: " << loop_step << '\n';
-						std::cout << ": " << std::flush;
+							left_deck->decrement_loop_step();
 					}else{
 						if(left_deck->get_play_mode() == AudioTrack_no_playback or left_deck->get_play_mode() == AudioTrack_beat_preview){
 							if(sensor->value == 1)
@@ -165,10 +159,8 @@ void _translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Gl
 				}
 				case SensorID_left_loop_in_button:
 					if(sensor->value == ButtonState_Released){
-						if(!left_deck->set_loop()){
-							std::cerr << "SerialInterface: _translate_sensor_changes(): Unable to set loop cue due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;
-						}
+						if(!left_deck->set_loop())
+							ui::print_to_infobar("SerialInterface: _translate_sensor_changes(): mutex error.", UIColorPair_Error);
 					}
 					break;					
 				case SensorID_left_loop_out_button:
@@ -177,10 +169,8 @@ void _translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Gl
 					
 				case SensorID_right_playpause_button:
 					if(sensor->value == ButtonState_Released){
-						if(!right_deck->toggle_play_pause()){
-							std::cerr << "SerialInterface: _translate_sensor_changes(): Unable to toggle play-pause due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;
-						}
+						if(!right_deck->toggle_play_pause())
+							ui::print_to_infobar("SerialInterface: _translate_sensor_changes(): mutex error.", UIColorPair_Error);
 					}
 					break;
 				case SensorID_right_cue_button:{
@@ -201,25 +191,20 @@ void _translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Gl
 				case SensorID_right_tempo_poten:{	
 					const float speed_multiplier = 1.0 + ((float)(sensor->value - potentiometer_centre_value) / potentiometer_value_for_max_range);
 					right_deck->set_destination_speed_multiplier(speed_multiplier);
-					std::cout << "Track 1 bpm: " << speed_multiplier * right_deck->get_bpm() << "x.\n";
-					std::cout << ": " << std::flush;
 					break;
 				}
 				case SensorID_right_jogdial_rotaryenc:{
 					const std::optional<std::int16_t> sensor_value_opt = _read_sensor(sensors, SensorID_right_loop_in_button);
-					if(not sensor_value_opt.has_value()){
-						std::cerr << "SerialInterface: _translate_sensor_changes(): no sensor with ID " << SensorID_right_loop_in_button << '\n';
-						std::cout << ": " << std::flush;
+					if(not sensor_value_opt.has_value()){			
+						const std::string msg = std::string("Serial: No sensor with ID ") + std::to_string(SensorID_right_loop_in_button);
+						ui::print_to_infobar(msg, UIColorPair_Error);
 					}
 					const bool holding_loop_in_button = sensor_value_opt.value() == ButtonState_Held;
 					if(holding_loop_in_button){
-						float loop_step = 0;
 						if(sensor->value == 1)
-							loop_step = right_deck->increment_loop_step();
+							right_deck->increment_loop_step();
 						else if(sensor->value == -1)
-							loop_step = right_deck->decrement_loop_step();
-						std::cout << "Track 1 beats per loop: " << loop_step << '\n';
-						std::cout << ": " << std::flush;
+							right_deck->decrement_loop_step();
 					}else{
 						if(right_deck->get_play_mode() == AudioTrack_no_playback or right_deck->get_play_mode() == AudioTrack_beat_preview){
 							if(sensor->value == 1)
@@ -234,13 +219,11 @@ void _translate_sensor_changes(std::vector<std::unique_ptr<Sensor>>& sensors, Gl
 						}
 					}
 					break;	
-				}					
+				}	
 				case SensorID_right_loop_in_button:{
 					if(sensor->value == ButtonState_Released){
-						if(!right_deck->set_loop()){
-							std::cerr << "SerialInterface: _translate_sensor_changes(): Unable to set loop cue due to rwlock acquisition error.\n";
-							std::cout << ": " << std::flush;
-						}
+						if(!right_deck->set_loop())
+							ui::print_to_infobar("SerialInterface: _translate_sensor_changes(): mutex error.", UIColorPair_Error);
 					}
 					break;
 				}
