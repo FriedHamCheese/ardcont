@@ -39,7 +39,7 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 				or loaded_status == AudioTrackAccess_BeingRead;
 				
 			if(can_read_audiotracks or global_states.requested_exit.load()) break;
-			std::this_thread::sleep_for(std::chrono::microseconds(500));
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 
 		if(status->load() == AudioTrackAccess_ReadyForReading)
@@ -66,34 +66,36 @@ static int stream_audio(const void *, void *output_void, unsigned long frameCoun
 }
 
 void run_output_device(OutputDeviceData device_data) noexcept{
-	PaError pa_error = paNoError;
-	try{
-		//output_stream Alloc
-		PaStream* output_stream;
-		pa_error = Pa_OpenStream(&output_stream, NULL, &(device_data.stream_parameters), 
-									ntrb_std_samplerate, device_data.global_states.get_frames_per_callback(), paNoFlag,
-									stream_audio, &device_data);
-		if(pa_error) goto print_err;
-		
-		pa_error = Pa_StartStream(output_stream);
-		if(pa_error) goto close_stream;
+	while(not device_data.global_states.requested_exit.load()){
+		PaError pa_error = paNoError;
+		try{
+			//output_stream Alloc
+			PaStream* output_stream;
+			pa_error = Pa_OpenStream(&output_stream, NULL, &(device_data.stream_parameters), 
+										ntrb_std_samplerate, device_data.global_states.get_frames_per_callback(), paNoFlag,
+										stream_audio, &device_data);
+			if(pa_error) goto print_err;
+			
+			pa_error = Pa_StartStream(output_stream);
+			if(pa_error) goto close_stream;
 
-		while(device_data.global_states.requested_exit.load() == false){
-			std::this_thread::sleep_for(std::chrono::milliseconds(device_data.global_states.msecs_per_callback) / 10);
+			while(device_data.global_states.requested_exit.load() == false){
+				std::this_thread::sleep_for(std::chrono::milliseconds(device_data.global_states.msecs_per_callback));
+			}
+			Pa_StopStream(output_stream);
+			
+			close_stream:
+			Pa_CloseStream(output_stream);
+			
+			print_err:
+			if(pa_error != paNoError)
+				ui::print_to_infobar(std::string("output device thread: PaError ") + std::to_string(pa_error), UIColorPair_Error);
 		}
-		Pa_StopStream(output_stream);
-		
-		close_stream:
-		Pa_CloseStream(output_stream);
-		
-		print_err:
-		if(pa_error != paNoError)
-			ui::print_to_infobar(std::string("output device thread: PaError ") + std::to_string(pa_error), UIColorPair_Error);
-	}
-	catch(const std::exception& excp){
-		ui::print_to_infobar(std::string("output device thread: ") + excp.what(), UIColorPair_Error);
-	}
-	catch(...){
-		ui::print_to_infobar(std::string("output device thread: uncaught throw"), UIColorPair_Error);
+		catch(const std::exception& excp){
+			ui::print_to_infobar(std::string("output device thread: ") + excp.what(), UIColorPair_Error);
+		}
+		catch(...){
+			ui::print_to_infobar(std::string("output device thread: uncaught throw"), UIColorPair_Error);
+		}
 	}
 }

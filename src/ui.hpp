@@ -30,6 +30,8 @@ namespace ui{
 	inline constexpr std::uint16_t deck_info_height = 20;
 	inline std::uint16_t deck_info_window_width = 20;
 	inline bool has_colors = false;
+	
+	inline std::chrono::seconds infobar_timeout(5);
 
 	inline std::uint16_t get_window_width(WINDOW* const window){
 		[[maybe_unused]] std::uint16_t width, height;

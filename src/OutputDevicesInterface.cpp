@@ -19,15 +19,15 @@ OutputDevicesInterface::OutputDevicesInterface(
 	if(audience_output_latency < monitor_output_latency) 
 		agreed_latency = monitor_output_latency;
 	
-	const OutputDeviceData monitor_data(global_states, monitor_output_device_index, agreed_latency, true);
-	this->monitor_output_device_thread = std::thread(run_output_device, monitor_data);
-	this->monitor_output_device_thread.detach();
+	const OutputDeviceData audience_data(global_states, audience_output_device_index, agreed_latency, false);
+	this->audience_output_device_thread = std::thread(run_output_device, audience_data);
+	this->audience_output_device_thread.detach();
 
 	const bool has_one_output_device = audience_output_device_index == monitor_output_device_index;
-	if(not has_one_output_device){
-		const OutputDeviceData audience_data(global_states, audience_output_device_index, agreed_latency, false);
-		this->audience_output_device_thread = std::thread(run_output_device, audience_data);
-		this->audience_output_device_thread.detach();
+	if(not has_one_output_device){	
+		const OutputDeviceData monitor_data(global_states, monitor_output_device_index, agreed_latency, true);
+		this->monitor_output_device_thread = std::thread(run_output_device, monitor_data);
+		this->monitor_output_device_thread.detach();
 	}
 }
 
@@ -37,13 +37,13 @@ void OutputDevicesInterface::run() noexcept{
 			const std::unique_ptr<AudioTrack>& left_deck = this->global_states.audio_tracks[0];
 			const std::unique_ptr<AudioTrack>& right_deck = this->global_states.audio_tracks[1];
 			
-			const uint8_t monitor_device_status = global_states.monitor_output_device_status.load();
-			switch(monitor_device_status){
+			const uint8_t audience_device_status = global_states.audience_output_device_status.load();
+			switch(audience_device_status){
 				case AudioTrackAccess_ReadingBlocked:{
-					if(not left_deck->get_sample_access_mutex().try_lock())
+					if(not left_deck->sample_access_mutex.try_lock())
 						break;
-					if(not right_deck->get_sample_access_mutex().try_lock()){
-						left_deck->get_sample_access_mutex().unlock();
+					if(not right_deck->sample_access_mutex.try_lock()){
+						left_deck->sample_access_mutex.unlock();
 						break;
 					}
 		
@@ -58,11 +58,11 @@ void OutputDevicesInterface::run() noexcept{
 				break;
 				
 				case AudioTrackAccess_FinishedReading:{
-					if(global_states.audience_output_device_status.load() == AudioTrackAccess_BeingRead)
+					if(global_states.monitor_output_device_status.load() == AudioTrackAccess_BeingRead)
 						break;
 
-					left_deck->get_sample_access_mutex().unlock();
-					right_deck->get_sample_access_mutex().unlock();
+					left_deck->sample_access_mutex.unlock();
+					right_deck->sample_access_mutex.unlock();
 					
 					try{
 						std::thread left_deck_load_thread = std::thread(left_deck->load_samples, left_deck.get());
@@ -79,7 +79,7 @@ void OutputDevicesInterface::run() noexcept{
 					break;
 				}
 				default:
-				ui::print_to_infobar("Invalid monitor device status.", UIColorPair_Error);
+				ui::print_to_infobar("Invalid audience device status.", UIColorPair_Error);
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}

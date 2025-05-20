@@ -40,7 +40,7 @@ Acquires the access mutex of a Sensor in *sensors* and reads the Sensor::value o
 
 Returns any a std::int16_t value from Sensor::value, std::nullopt if no Sensor with *sensor_id* is found.
 */
-std::optional<std::int16_t> _read_sensor(std::vector<std::unique_ptr<Sensor>>& sensors, const::std::int16_t sensor_id);
+std::optional<std::int16_t> _read_sensor(const std::vector<std::unique_ptr<Sensor>>& sensors, const::std::int16_t sensor_id);
 
 /**
 A subfunction of serial_listener(), ran as a different thread.

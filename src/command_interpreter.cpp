@@ -13,7 +13,7 @@
 #include <string>
 #include <iostream>
 
-void load_command(const std::string& args_str, GlobalStates& global_states){
+void load_command(const std::string& args_str, GlobalStates& global_states){	
 	const std::size_t first_arg_separator_index = args_str.find(' ');
 	if(first_arg_separator_index == std::string::npos){
 		ui::print_to_infobar("l(oad) command format: l track_id filename", UIColorPair_Error);
@@ -136,7 +136,6 @@ void toggle_monitor_command(const std::string& args_str, GlobalStates& global_st
 }
 
 void interpret_command(GlobalStates& global_states, const std::string& input_text) noexcept{
-	static std::string typing_string;
 	try{
 		std::string command_str, args_str;
 		command_str.clear();
@@ -150,6 +149,7 @@ void interpret_command(GlobalStates& global_states, const std::string& input_tex
 			command_str = input_text.substr(0, command_arg_separator_index);
 			args_str = input_text.substr(command_arg_separator_index+1);
 		}
+		ui::print_to_infobar("interpret_command()", UIColorPair_Info);
 		
 		if(command_str == "q"){
 			global_states.requested_exit = true;
@@ -163,7 +163,6 @@ void interpret_command(GlobalStates& global_states, const std::string& input_tex
 		else if(command_str == "tm")
 			toggle_monitor_command(args_str, global_states);
 		else ui::print_to_infobar("Invalid command", UIColorPair_Error);
-		
 	}
 	catch(const std::exception& excp){
 		ui::print_to_infobar(std::string("command_interpreter: interpret_command(): ") + excp.what(), UIColorPair_Error);

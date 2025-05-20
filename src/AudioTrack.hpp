@@ -117,11 +117,7 @@ class AudioTrack{
 	Returns false if could not find the previous beat due to rwlock error.
 	*/
 	bool play_only_prev_beat() noexcept;
-	
-	///Get the mutex for accessing AudioTrack::samples.
-	std::mutex& get_sample_access_mutex() noexcept{
-		return this->sample_access_mutex;
-	}
+
 	///Get a const reference to AudioTrack::samples.
 	const std::vector<float>& get_samples() const noexcept{
 		return this->samples;
@@ -169,13 +165,36 @@ class AudioTrack{
 	float get_bpm() const noexcept{
 		return this->bpm.load();		
 	}
+	double get_current_stdaud_frame() const noexcept{
+		return this->current_stdaud_frame.load();
+	}
+	std::uint32_t get_loop_frame_begin() const noexcept{
+		return this->loop_frame_begin.load();
+	}
+	std::uint32_t get_loop_frame_end() const noexcept{
+		return this->loop_frame_end.load();
+	}
+	float get_beats_per_loop() const noexcept{
+		return this->beats_per_loop.load();
+	}
+	bool is_loop_queued() const noexcept{
+		return this->loop_queued.load();
+	}
+	const std::string& get_filename() const noexcept{
+		return this->audfile_name;
+	}
+	
 	enum EffectType effect_type;
+	
 	EffectContainer& get_effect_container() noexcept{
 		return this->effect_container;
 	}
-	
-	std::atomic_bool output_to_monitor = false;
 
+	///Mutex for accessing AudioTrack::samples.
+	std::mutex sample_access_mutex;
+	std::atomic_bool output_to_monitor = false;
+	std::atomic<double> destination_speed_multiplier = 1.0;
+	
 	private:
 	/**
 	Append a single frame (both left and right samples) to AudioTrack::samples while taking playback speed into account,
@@ -225,8 +244,6 @@ class AudioTrack{
 	///Adjust AudioTrack::speed_multiplier to approach AudioTrack::destination_speed_multiplier in between frames.
 	void adjust_speed_multiplier() noexcept;
 	
-	///Mutex for accessing AudioTrack::samples.
-	std::mutex sample_access_mutex;
 	///A vector containing the final stdaud frames of the deck for an audio engine callback.
 	std::vector<float> samples;
 	///The number of frames to be in AudioTrack::samples which an AudioTrack must provide for the audio engine callback.
@@ -239,9 +256,7 @@ class AudioTrack{
 	 * This has to be incremented by AudioTrack::speed_multiplier.
 	 * This can be used to set the start of AudioTrack::stdaud_from_file.
 	 * */
-	public:
 	std::atomic<double> current_stdaud_frame;
-	private:
 	/**
 	 * The underlying object which contains a buffer of stdaud frames of an audio file to play from.  
 	 */
@@ -259,10 +274,9 @@ class AudioTrack{
 
 	 This value differs from AudioTrack::destination_speed_multiplier which can only be changed by the tempo knob and changes instantly; while speed_multiplier needs time to catch up with the former to simulate turntable rotational speed acceleration/deceleration. It can be changed from the tempo knob or jogging, and should be changed for every frame applied to AudioTrack::samples to simulate smooth turntable rotational acceleration. 
 	 */
-	public:
 	std::atomic<double> speed_multiplier = 1.0;
 	///The playback speed ratio to theoretically play at.
-	std::atomic<double> destination_speed_multiplier = 1.0;
+
 	private:
 	/**
 	 * The amount of time for AudioTrack::speed_multiplier to reach AudioTrack::destination_speed_multiplier, regardless of the difference between the two.
@@ -279,23 +293,19 @@ class AudioTrack{
 	std::atomic<std::uint32_t> end_beat_preview_at_frame;
 
 	//Looping
-	public:
 	std::atomic<std::uint32_t> loop_frame_begin;
 	std::atomic<std::uint32_t> loop_frame_end;
 	std::atomic<float> beats_per_loop = 4;
 	std::atomic<bool> loop_queued = false;
-	private:
 	///The stdaud frame at which the first beat is at.
 	///This is used in calculating loops and cue points.
 	std::atomic<std::uint32_t> first_beat_stdaud_frame;
 
 	//Track data
-	public:
 	std::string audfile_name = "Track not loaded.";
 	std::atomic<float> bpm = 0.0;		
 	std::uint8_t track_id;
-	
-	private:
+
 	bool fill_sample_buffer_while_in_beat_preview(const std::uint32_t minimum_samples_in_sample_buffer);
 	
 	static float get_seconds_per_beat(const float bpm) noexcept{

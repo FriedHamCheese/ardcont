@@ -84,7 +84,7 @@ bool _write_to_sensor(std::vector<std::unique_ptr<Sensor>>& sensors,
 	return false;
 }
 
-std::optional<std::int16_t> _read_sensor(std::vector<std::unique_ptr<Sensor>>& sensors, const::std::int16_t sensor_id){
+std::optional<std::int16_t> _read_sensor(const std::vector<std::unique_ptr<Sensor>>& sensors, const::std::int16_t sensor_id){
 	for(const auto& sensor : sensors){
 		if(sensor->sensor_id == sensor_id){
 			std::lock_guard<std::mutex> current_sensor_access(sensor->access_mutex);

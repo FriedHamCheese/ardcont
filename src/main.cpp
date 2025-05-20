@@ -193,6 +193,9 @@ int main(){
 		std::thread serial_thread(serial_listener, std::ref(arduino_serial), std::ref(global_states));
 		serial_thread.join();
 	}
+	
+	//global_states.audio_tracks[0]->set_file_to_load_from("../mixaud/bolo.flac", global_states.get_frames_per_callback());
+	
 	std::thread output_devices_interface_thread(devices_interface.run, &devices_interface);
 	std::thread ui_renderer_thread(ui::render_ui, std::ref(global_states));
 	

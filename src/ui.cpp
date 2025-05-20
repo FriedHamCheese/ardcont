@@ -41,16 +41,16 @@ std::string ui::ms_to_mm_ss_mss_str(std::uint32_t ms){
 }
 
 static void draw_audiotrack_info_to_deck_window(WINDOW* const window, const std::unique_ptr<AudioTrack>& audiotrack){
-	const std::uint32_t current_ms = ui::stdaud_frames_to_ms(audiotrack->current_stdaud_frame.load());
+	const std::uint32_t current_ms = ui::stdaud_frames_to_ms(audiotrack->get_current_stdaud_frame());
 	
-	mvwprintw(window, 1, 1, ui::filename_from_filepath(audiotrack->audfile_name).c_str());
+	mvwprintw(window, 1, 1, ui::filename_from_filepath(audiotrack->get_filename()).c_str());
 	mvwprintw(window, 2, 1, "%s", ui::ms_to_mm_ss_mss_str(current_ms).c_str());
-	mvwprintw(window, 3, 1, "BPM: %.2f (%.2fx)", audiotrack->bpm.load() * audiotrack->destination_speed_multiplier.load(), audiotrack->destination_speed_multiplier.load());
-	if(audiotrack->loop_queued.load()){
-		const std::uint32_t loop_begin_ms = ui::stdaud_frames_to_ms(audiotrack->loop_frame_begin.load());
-		const std::uint32_t loop_end_ms = ui::stdaud_frames_to_ms(audiotrack->loop_frame_end.load());
+	mvwprintw(window, 3, 1, "BPM: %.2f (%.2fx)", audiotrack->get_bpm() * audiotrack->destination_speed_multiplier.load(), audiotrack->destination_speed_multiplier.load());
+	if(audiotrack->is_loop_queued()){
+		const std::uint32_t loop_begin_ms = ui::stdaud_frames_to_ms(audiotrack->get_loop_frame_begin());
+		const std::uint32_t loop_end_ms = ui::stdaud_frames_to_ms(audiotrack->get_loop_frame_end());
 
-		mvwprintw(window, 4, 1, "Loop %s - %s (%.2f beats)", ui::ms_to_mm_ss_mss_str(loop_begin_ms).c_str(), ui::ms_to_mm_ss_mss_str(loop_end_ms).c_str(), audiotrack->beats_per_loop.load());
+		mvwprintw(window, 4, 1, "Loop %s - %s (%.2f beats)", ui::ms_to_mm_ss_mss_str(loop_begin_ms).c_str(), ui::ms_to_mm_ss_mss_str(loop_end_ms).c_str(), audiotrack->get_beats_per_loop());
 	}
 	
 	const EffectType effect_type = audiotrack->effect_type;
@@ -102,7 +102,7 @@ void ui::render_ui(GlobalStates& global_states) noexcept{
 			wrefresh(ui::right_deck_info_window);
 			
 			werase(ui::stdout_window);
-			const bool last_message_timed_out = std::chrono::steady_clock::now() - std::get<2>(ui::last_infobar_message) > std::chrono::seconds(5);
+			const bool last_message_timed_out = std::chrono::steady_clock::now() - std::get<2>(ui::last_infobar_message) > ui::infobar_timeout;
 			if(not last_message_timed_out){
 				attron(A_REVERSE);
 				if(ui::has_colors) attron(COLOR_PAIR(std::get<1>(ui::last_infobar_message)));
@@ -119,7 +119,7 @@ void ui::render_ui(GlobalStates& global_states) noexcept{
 			werase(ui::keyboard_input_window);
 			box(ui::keyboard_input_window, 0, 0);
 			
-			const std::chrono::milliseconds total_wait_for_user_keystroke(15);
+			const std::chrono::milliseconds total_wait_for_user_keystroke(5);
 			const std::uint8_t wait_attempts = 8;
 			const std::chrono::microseconds wait_per_attempt = total_wait_for_user_keystroke / wait_attempts;
 			for(std::uint8_t i = 0; i < wait_attempts; i++){
@@ -127,21 +127,25 @@ void ui::render_ui(GlobalStates& global_states) noexcept{
 				const int key_pressed = getch();
 				const bool key_is_normal_ASCII = key_pressed < 128;
 				
-				if(key_pressed == ERR) continue;
-				else if(key_is_normal_ASCII and key_pressed != '\n')
+				if(key_pressed == ERR){
+					continue;
+				}
+				else if(key_is_normal_ASCII and key_pressed != '\n'){
 					typing_text += key_pressed;
+				}
 				else if(key_pressed == '\n' or key_pressed == KEY_ENTER){
 					interpret_command(global_states, typing_text);
 					typing_text.clear();
 				}
-				else if(key_pressed == KEY_BACKSPACE or key_pressed == KEY_DC)
+				else if(key_pressed == KEY_BACKSPACE or key_pressed == KEY_DC){
 					if(typing_text.size() > 0) typing_text.pop_back();
+				}
 				break;
 			}
 			mvwprintw(ui::keyboard_input_window, 1, 1, ": %s", typing_text.c_str());
 			wrefresh(ui::keyboard_input_window);
 			
-			std::this_thread::sleep_for(std::chrono::milliseconds(15));
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
 		}
 		catch(const std::exception& excp){
 			ui::print_to_infobar(std::string("ui::render_ui(): ") + excp.what(), UIColorPair_Error);
