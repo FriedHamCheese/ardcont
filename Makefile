@@ -9,18 +9,16 @@ NTRB_DLL := ./libntrb.dll
 
 include $(NTRB_DIR)/makeconfig.make
 
-include makeconfig.make
+CXXFLAGS := -Wall -Wextra -g3 -I$(NTRB_DIR)/$(NTRB_PORTAUDIO_INCLUDE) -I$(NTRB_DIR)/$(NTRB_FLAC_INCLUDE) -I$(NTRB_DIR)/include -I./serial/include $(NTRB_COMPILING_SYMBOLS) -DNTRB_DLL_IMPORT -DNCURSES_STATIC
+LDLIBS := -L./serial/bin -L$(NTRB_DIR)/$(NTRB_PORTAUDIO_LIBDIR) -L$(NTRB_DIR)/$(NTRB_FLAC_LIBDIR) -L$(NTRB_DIR)/bin -lntrb -lncurses -lserial -lsetupapi -lportaudio -lflac.dll
 
-CXXFLAGS := -Wall -Wextra -g3 -I$(NTRB_DIR)/$(NTRB_PORTAUDIO_INCLUDE) -I$(NTRB_DIR)/$(NTRB_FLAC_INCLUDE) -I$(NTRB_DIR)/include $(SERIAL_INCLUDE) $(NTRB_COMPILING_SYMBOLS) -DNCURSES_STATIC -DNTRB_DLL_IMPORT
-LDLIBS := $(SERIAL_LINKING_FLAGS) -L$(NTRB_DIR)/$(NTRB_PORTAUDIO_LIBDIR) -L$(NTRB_DIR)/$(NTRB_FLAC_LIBDIR) -L$(NTRB_DIR)/bin -lntrb -lncurses -lportaudio -lflac.dll
-
-build.exe: $(OBJ_FILES) $(NTRB_DLL) Makefile
+build.exe: $(OBJ_FILES) $(NTRB_DLL)
 	$(CXX) -o $@ $(OBJ_FILES) $(LDLIBS)
 	
 ./libntrb.dll: Makefile
 	cp ../naturau-base/bin/libntrb.dll ./
 
-$(OBJ_FILES): ./bin/%.o: ./src/%.cpp $(HEADER_FILES) Makefile | ./bin
+$(OBJ_FILES): ./bin/%.o: ./src/%.cpp $(HEADER_FILES) | ./bin
 	$(CXX) $< -c $(CXXFLAGS) -o $@
 
 ./bin:

@@ -1,0 +1,7 @@
+./serial/bin/libserial.a:
+	@echo Installing wjwood-serial...
+	$(MAKE) -C ./serial
+
+.PHONY: clean
+clean:
+	-rm -rf ./serial/bin
