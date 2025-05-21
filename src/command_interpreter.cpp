@@ -149,7 +149,6 @@ void interpret_command(GlobalStates& global_states, const std::string& input_tex
 			command_str = input_text.substr(0, command_arg_separator_index);
 			args_str = input_text.substr(command_arg_separator_index+1);
 		}
-		ui::print_to_infobar("interpret_command()", UIColorPair_Info);
 		
 		if(command_str == "q"){
 			global_states.requested_exit = true;

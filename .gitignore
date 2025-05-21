@@ -6,3 +6,5 @@ libportaudio.dll
 *.o
 /doc/html
 /doc/latex
+libFLAC.dll
+libntrb.dll
